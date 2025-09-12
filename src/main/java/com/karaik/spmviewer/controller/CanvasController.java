@@ -5,7 +5,6 @@ import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.Group;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.control.ToggleButton;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
@@ -46,8 +45,8 @@ public class CanvasController {
         this.currentPageIndex = index;
     }
 
-    public void renderPage(ToggleButton tbShowPageRect, ToggleButton tbShowHit, ToggleButton tbShowChipBounds) {
-        if (currentSpm == null || currentPageIndex < 0) {
+    public void renderPage() {
+        if (currentSpm == null || currentPageIndex < 0 || currentSpm.getPageData() == null || currentPageIndex >= currentSpm.getPageData().size()) {
             clearCanvas();
             return;
         }
@@ -61,8 +60,7 @@ public class CanvasController {
             canvas.setHeight(h);
         }
 
-        renderer.render(canvas, currentSpm, currentPageIndex, loadedImages,
-                tbShowPageRect.isSelected(), tbShowHit.isSelected(), tbShowChipBounds.isSelected());
+        renderer.render(canvas, currentSpm, currentPageIndex, loadedImages);
     }
 
     public void previewImage(int imageIndex, String imageName) {

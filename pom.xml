@@ -214,8 +214,8 @@
                             <generateInstaller>true</generateInstaller>
                             <administratorRequired>false</administratorRequired>
                             <platform>windows</platform>
-                            <displayName>NeXASConverter</displayName>
-                            <name>NeXASConverter</name>
+                            <displayName>NeXASSpmViewer</displayName>
+                            <name>NeXASSpmViewer</name>
                             <version>1.1.0</version>
                             <winConfig>
                                 <icoFile>${project.basedir}/src/main/resources/icon.ico</icoFile>

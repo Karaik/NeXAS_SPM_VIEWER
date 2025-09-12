@@ -1,22 +1,38 @@
 package com.karaik.spmviewer.controller;
 
+import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.model.SpmEntry;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
+import javafx.collections.FXCollections; // ADDED
+import javafx.collections.ListChangeListener; // ADDED
+import javafx.collections.ObservableList; // ADDED
+import javafx.collections.transformation.FilteredList; // ADDED
 import javafx.fxml.FXML;
 import javafx.scene.Group;
+import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
 import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 import javafx.util.Duration;
+import javafx.util.StringConverter;
+import javafx.util.converter.NumberStringConverter;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -24,13 +40,13 @@ import java.util.Optional;
 public class MainViewController {
 
     // --- FXML Binds ---
-    // MODIFIED: Changed MenuItem to CheckMenuItem to match the FXML definition
-    @FXML private CheckMenuItem miShowPageRect, miShowHit, miShowChipBounds;
-    @FXML private ToggleButton tbShowPageRect, tbShowHit, tbShowChipBounds;
-    @FXML private Spinner<Integer> pageSpinner;
+    @FXML private TextField searchField; // ADDED for search functionality
     @FXML private Slider zoomSlider;
+    @FXML private TextField zoomField;
     @FXML private ComboBox<String> animSelector;
     @FXML private Slider fpsSlider;
+    @FXML private TextField fpsField;
+    @FXML private CheckBox alwaysOnTopCheck;
     @FXML private ListView<SpmEntry> spmListView;
     @FXML private TreeView<String> pageTree;
     @FXML private TreeView<String> animTree;
@@ -51,6 +67,9 @@ public class MainViewController {
     private Timeline animTimeline;
     private double dragStartX, dragStartY, hValStart, vValStart;
 
+    // ADDED: Master list to hold all items for filtering
+    private ObservableList<SpmEntry> masterSpmList;
+
     @FXML
     public void initialize() {
         // --- Canvas and Scaling Setup ---
@@ -64,7 +83,10 @@ public class MainViewController {
         });
 
         // --- Initialize Controllers ---
-        spmFileHandler = new SpmFileHandler(spmListView, progressBar, statusLabel);
+        // MODIFIED: Setup for filtering
+        masterSpmList = FXCollections.observableArrayList();
+        spmFileHandler = new SpmFileHandler(masterSpmList, progressBar, statusLabel);
+
         uiStateController = new UiStateController(pageTree, animTree, imageList, animSelector,
                 lblVersion, lblPages, lblImages, lblAnims, chipTable, hitTable);
 
@@ -72,11 +94,15 @@ public class MainViewController {
         setupSpmListCellFactory();
         setupBindingsAndListeners();
         setupInteractions();
+        setupValueBindings();
+        setupFiltering(); // ADDED
+        setupExpandAllContextMenus(); // ADDED
 
         // Initial state
         uiStateController.clearAllPanels();
         canvasController.clearCanvas();
-        pageSpinner.setDisable(true);
+
+        loadLastDirectory();
     }
 
     // --- Setup Methods ---
@@ -107,14 +133,6 @@ public class MainViewController {
     }
 
     private void setupBindingsAndListeners() {
-        // View toggles
-        tbShowPageRect.selectedProperty().bindBidirectional(miShowPageRect.selectedProperty());
-        tbShowHit.selectedProperty().bindBidirectional(miShowHit.selectedProperty());
-        tbShowChipBounds.selectedProperty().bindBidirectional(miShowChipBounds.selectedProperty());
-        tbShowPageRect.setOnAction(e -> renderCurrentPage());
-        tbShowHit.setOnAction(e -> renderCurrentPage());
-        tbShowChipBounds.setOnAction(e -> renderCurrentPage());
-
         // SPM List selection
         spmListView.getSelectionModel().selectedItemProperty().addListener((obs, old, entry) -> {
             if (entry != null && entry.getStatus() == SpmEntry.Status.SUCCESS) {
@@ -122,15 +140,43 @@ public class MainViewController {
             }
         });
 
+        // ADDED: Auto-select first item when list is populated/re-filtered
+        masterSpmList.addListener((ListChangeListener<SpmEntry>) c -> {
+            if (!masterSpmList.isEmpty() && spmListView.getSelectionModel().getSelectedItem() == null) {
+                // Check if the currently filtered list is not empty before selecting
+                if (!spmListView.getItems().isEmpty()) {
+                    spmListView.getSelectionModel().selectFirst();
+                }
+            }
+        });
+
+
         // Page/Anim/Image selection
-        pageSpinner.valueProperty().addListener((o, ov, nv) -> selectPage(nv));
         pageTree.getSelectionModel().selectedItemProperty().addListener((o, ov, item) -> {
-            if (item != null && item.getParent() != null) {
+            if (item != null && item.isLeaf()) {
                 try {
                     selectPage(Integer.parseInt(item.getValue().split(" ")[0]));
                 } catch (Exception ignored) {}
             }
         });
+
+        animTree.getSelectionModel().selectedItemProperty().addListener((o, ov, item) -> {
+            if (item != null && item.isLeaf()) {
+                try {
+                    String value = item.getValue();
+                    if (value.contains("pages=[")) {
+                        String pageStr = value.substring(value.indexOf('[') + 1, value.indexOf(']'));
+                        if (!pageStr.isEmpty()) {
+                            int pageToSelect = Integer.parseInt(pageStr.split(",")[0].trim());
+                            selectPage(pageToSelect);
+                            String animName = item.getParent().getValue();
+                            animSelector.getSelectionModel().select(animName);
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        });
+
         imageList.getSelectionModel().selectedItemProperty().addListener((obs, old, item) -> {
             if (item != null) {
                 try {
@@ -139,7 +185,19 @@ public class MainViewController {
                 } catch (Exception ignored) {}
             }
         });
+
         animSelector.setOnAction(e -> { if (animSelector.getValue() != null) onPlay(); });
+
+        alwaysOnTopCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            Stage stage = (Stage) canvasHolder.getScene().getWindow();
+            stage.setAlwaysOnTop(newVal);
+        });
+
+        canvasHolder.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) {
+                setupKeyboardShortcuts(newScene);
+            }
+        });
     }
 
     private void setupInteractions() {
@@ -161,9 +219,103 @@ public class MainViewController {
                 e.consume();
             }
         });
+
+        scrollPane.addEventFilter(ScrollEvent.SCROLL, event -> {
+            if (event.isControlDown()) {
+                double zoomFactor = 1.1;
+                double delta = event.getDeltaY();
+                if (delta < 0) {
+                    zoomSlider.setValue(zoomSlider.getValue() / zoomFactor);
+                } else {
+                    zoomSlider.setValue(zoomSlider.getValue() * zoomFactor);
+                }
+                event.consume();
+            }
+        });
     }
 
-    // --- Selection and State Change Logic ---
+    private void setupValueBindings() {
+        NumberFormat zoomFormat = new DecimalFormat("0.0x");
+        StringConverter<Number> zoomConverter = new NumberStringConverter(zoomFormat);
+        zoomField.textProperty().bindBidirectional(zoomSlider.valueProperty(), zoomConverter);
+
+        NumberFormat fpsFormat = new DecimalFormat("0");
+        StringConverter<Number> fpsConverter = new NumberStringConverter(fpsFormat);
+        fpsField.textProperty().bindBidirectional(fpsSlider.valueProperty(), fpsConverter);
+    }
+
+    // --- NEW FUNCTIONALITY METHODS ---
+
+    private void setupFiltering() {
+        FilteredList<SpmEntry> filteredList = new FilteredList<>(masterSpmList, p -> true);
+
+        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
+            filteredList.setPredicate(spmEntry -> {
+                if (newValue == null || newValue.isEmpty()) {
+                    return true;
+                }
+                String lowerCaseFilter = newValue.toLowerCase();
+                return spmEntry.getPath().getFileName().toString().toLowerCase().contains(lowerCaseFilter);
+            });
+            // After filtering, if nothing is selected but list is not empty, select first item
+            if (spmListView.getSelectionModel().getSelectedItem() == null && !spmListView.getItems().isEmpty()) {
+                spmListView.getSelectionModel().selectFirst();
+            }
+        });
+
+        spmListView.setItems(filteredList);
+    }
+
+    private void setupExpandAllContextMenus() {
+        setupExpandAllContextMenu(pageTree);
+        setupExpandAllContextMenu(animTree);
+    }
+
+    private void setupExpandAllContextMenu(TreeView<?> treeView) {
+        ContextMenu contextMenu = new ContextMenu();
+        MenuItem expandAllItem = new MenuItem("Expand All");
+        expandAllItem.setOnAction(event -> {
+            if (treeView.getRoot() != null) {
+                expandTreeView(treeView.getRoot());
+            }
+        });
+        contextMenu.getItems().add(expandAllItem);
+        treeView.setContextMenu(contextMenu);
+    }
+
+    private void expandTreeView(TreeItem<?> item) {
+        if (item != null && !item.isLeaf()) {
+            item.setExpanded(true);
+            for (TreeItem<?> child : item.getChildren()) {
+                expandTreeView(child);
+            }
+        }
+    }
+
+    // --- END NEW FUNCTIONALITY METHODS ---
+
+    private void setupKeyboardShortcuts(Scene scene) {
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.PLAY || event.getCode() == KeyCode.PASTE) {
+                if (animTimeline != null && animTimeline.getStatus() == Timeline.Status.RUNNING) {
+                    onStop();
+                } else {
+                    onPlay();
+                }
+                event.consume();
+            }
+        });
+    }
+
+    private void loadLastDirectory() {
+        String lastDirPath = Settings.getLastDirectory();
+        if (lastDirPath != null && !lastDirPath.isEmpty()) {
+            Path path = Path.of(lastDirPath);
+            if (Files.isDirectory(path)) {
+                spmFileHandler.loadDirectory(path);
+            }
+        }
+    }
 
     private void selectSpm(SpmEntry entry) {
         onStop();
@@ -172,12 +324,8 @@ public class MainViewController {
 
         int pageCount = Optional.ofNullable(entry.getSpm().getNumPageData()).orElse(0);
         if (pageCount > 0) {
-            pageSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, pageCount - 1, 0));
-            pageSpinner.setDisable(false);
             selectPage(0);
         } else {
-            pageSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(-1, -1, -1));
-            pageSpinner.setDisable(true);
             uiStateController.updateTablesForPage(null);
             canvasController.clearCanvas();
         }
@@ -196,22 +344,17 @@ public class MainViewController {
         canvasController.setCurrentPageIndex(index);
         uiStateController.updateTablesForPage(spm.getPageData().get(index));
         renderCurrentPage();
-
-        if (!pageSpinner.getValue().equals(index)) {
-            pageSpinner.getValueFactory().setValue(index);
-        }
     }
 
     private void previewImage(int index, String imageName) {
         onStop();
         pageTree.getSelectionModel().clearSelection();
-        pageSpinner.setDisable(true);
         uiStateController.updateTablesForPage(null);
         canvasController.previewImage(index, imageName);
     }
 
     private void renderCurrentPage() {
-        canvasController.renderPage(tbShowPageRect, tbShowHit, tbShowChipBounds);
+        canvasController.renderPage();
     }
 
     // --- FXML Action Handlers ---
@@ -220,8 +363,11 @@ public class MainViewController {
         spmFileHandler.openSpmDirectory(canvasHolder.getScene().getWindow());
     }
 
+    @FXML private void onShowCharsetSettings() {
+        CharsetDialog.showDialog(canvasHolder.getScene().getWindow());
+    }
+
     @FXML private void onExportPng() {
-        // This logic remains simple and can stay here
         FileChooser fc = new FileChooser();
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG", "*.png"));
         fc.setInitialFileName("spm-export.png");
@@ -237,11 +383,25 @@ public class MainViewController {
     }
 
     @FXML private void onQuit() {
-        canvasHolder.getScene().getWindow().hide();
+        ((Stage) canvasHolder.getScene().getWindow()).close();
+    }
+
+    @FXML private void onShowShortcuts() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.initOwner(canvasHolder.getScene().getWindow());
+        alert.setTitle("Shortcuts");
+        alert.setHeaderText("Keyboard and Mouse Shortcuts");
+        String content = "Play/Pause Media Key: Toggle animation playback\n\n" +
+                "Ctrl + Mouse Scroll: Zoom in/out on the canvas\n\n" +
+                "Middle Mouse Button Drag: Pan the canvas";
+        alert.setContentText(content);
+        alert.showAndWait();
     }
 
     @FXML private void onAbout() {
-        new Alert(Alert.AlertType.INFORMATION, "NeXAS Sprite Viewer\nMajor refactoring complete.").showAndWait();
+        Alert aboutDialog = new Alert(Alert.AlertType.INFORMATION, "NeXAS Sprite Viewer");
+        aboutDialog.initOwner(canvasHolder.getScene().getWindow());
+        aboutDialog.showAndWait();
     }
 
     @FXML private void onZoom1x() {

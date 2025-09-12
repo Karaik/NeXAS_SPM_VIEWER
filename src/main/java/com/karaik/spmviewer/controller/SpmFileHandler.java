@@ -1,10 +1,11 @@
 package com.karaik.spmviewer.controller;
 
+import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.model.SpmEntry;
 import com.karaik.spmviewer.spm.parser.SpmParser;
+import javafx.collections.ObservableList; // ADDED
 import javafx.concurrent.Task;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Window;
@@ -19,13 +20,15 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SpmFileHandler {
 
-    private final ListView<SpmEntry> spmListView;
+    // MODIFIED: Changed from ListView to ObservableList to support filtering
+    private final ObservableList<SpmEntry> spmList;
     private final ProgressBar progressBar;
     private final Label statusLabel;
     private Path currentDirectory;
 
-    public SpmFileHandler(ListView<SpmEntry> spmListView, ProgressBar progressBar, Label statusLabel) {
-        this.spmListView = spmListView;
+    // MODIFIED: Constructor now accepts an ObservableList instead of a ListView
+    public SpmFileHandler(ObservableList<SpmEntry> spmList, ProgressBar progressBar, Label statusLabel) {
+        this.spmList = spmList;
         this.progressBar = progressBar;
         this.statusLabel = statusLabel;
     }
@@ -37,20 +40,36 @@ public class SpmFileHandler {
     public void openSpmDirectory(Window owner) {
         DirectoryChooser dc = new DirectoryChooser();
         dc.setTitle("Open Directory with SPM files");
+        String lastDir = Settings.getLastDirectory();
+        if (lastDir != null) {
+            File initialDir = new File(lastDir);
+            if (initialDir.isDirectory()) {
+                dc.setInitialDirectory(initialDir);
+            }
+        }
         File dir = dc.showDialog(owner);
-        if (dir == null || !dir.isDirectory()) {
+        if (dir != null && dir.isDirectory()) {
+            loadDirectory(dir.toPath());
+        }
+    }
+
+    public void loadDirectory(Path directory) {
+        if (directory == null || !Files.isDirectory(directory)) {
             return;
         }
 
-        currentDirectory = dir.toPath();
+        currentDirectory = directory;
+        Settings.setLastDirectory(currentDirectory.toAbsolutePath().toString());
+
         Task<Void> loadTask = createLoadTask(currentDirectory);
 
         progressBar.progressProperty().bind(loadTask.progressProperty());
         progressBar.setVisible(true);
 
         loadTask.setOnSucceeded(e -> {
-            statusLabel.setText("Loaded " + spmListView.getItems().size() + " SPM files from " + currentDirectory);
+            statusLabel.setText("Loaded " + spmList.size() + " SPM files from " + currentDirectory.getFileName());
             progressBar.setVisible(false);
+            // MODIFIED: Selection logic is now handled by the controller
         });
 
         loadTask.setOnFailed(e -> {
@@ -61,6 +80,7 @@ public class SpmFileHandler {
 
         new Thread(loadTask).start();
     }
+
 
     private Task<Void> createLoadTask(Path directory) {
         return new Task<>() {
@@ -81,7 +101,8 @@ public class SpmFileHandler {
                 final int total = spmFiles.size();
                 updateProgress(0, total);
 
-                javafx.application.Platform.runLater(() -> spmListView.getItems().clear());
+                // MODIFIED: Now clears the master list directly
+                javafx.application.Platform.runLater(spmList::clear);
 
                 for (int i = 0; i < total; i++) {
                     Path spmPath = spmFiles.get(i);
@@ -89,7 +110,7 @@ public class SpmFileHandler {
                     SpmParser parser = new SpmParser();
                     try {
                         byte[] data = Files.readAllBytes(spmPath);
-                        entry.setSpm(parser.parse(data, spmPath.getFileName().toString(), "windows-31j"));
+                        entry.setSpm(parser.parse(data, spmPath.getFileName().toString(), Settings.getCharsetName()));
                         entry.setStatus(SpmEntry.Status.SUCCESS);
                     } catch (Exception ex) {
                         log.warn("Failed to parse SPM file: {}", spmPath, ex);
@@ -98,7 +119,8 @@ public class SpmFileHandler {
                     }
 
                     final SpmEntry finalEntry = entry;
-                    javafx.application.Platform.runLater(() -> spmListView.getItems().add(finalEntry));
+                    // MODIFIED: Now adds to the master list directly
+                    javafx.application.Platform.runLater(() -> spmList.add(finalEntry));
                     updateProgress(i + 1, total);
                     updateMessage("Loading: " + spmPath.getFileName());
                 }

@@ -13,7 +13,6 @@
                 <menus>
                     <Menu text="File">
                         <items>
-                            <!-- MODIFIED: Changed menu items -->
                             <MenuItem text="Open Directory..." onAction="#onOpenDirectory"/>
                             <SeparatorMenuItem/>
                             <MenuItem text="Export Canvas as PNG…" onAction="#onExportPng"/>
@@ -21,89 +20,86 @@
                             <MenuItem text="Quit" onAction="#onQuit"/>
                         </items>
                     </Menu>
-                    <Menu text="View">
+                    <!-- MODIFIED: Replaced View menu with Settings menu -->
+                    <Menu text="Settings">
                         <items>
-                            <CheckMenuItem text="Show Page Rect" selected="true" fx:id="miShowPageRect"/>
-                            <CheckMenuItem text="Show Hit Areas" selected="true" fx:id="miShowHit"/>
-                            <CheckMenuItem text="Show Chip Bounds" fx:id="miShowChipBounds"/>
+                            <MenuItem text="Charset..." onAction="#onShowCharsetSettings"/>
                         </items>
                     </Menu>
                     <Menu text="Help">
                         <items>
+                            <!-- ADDED: New menu item for shortcuts -->
+                            <MenuItem text="Shortcuts" onAction="#onShowShortcuts"/>
                             <MenuItem text="About" onAction="#onAbout"/>
                         </items>
                     </Menu>
                 </menus>
             </MenuBar>
 
+            <!-- MODIFIED: Toolbar layout has been significantly changed -->
             <ToolBar>
-                <Label text="Page:"/>
-                <Spinner fx:id="pageSpinner" editable="true" prefWidth="100"/>
-
-                <Separator orientation="VERTICAL"/>
-
-                <ToggleButton fx:id="tbShowPageRect" text="Page Rect" selected="true"/>
-                <ToggleButton fx:id="tbShowHit" text="Hit" selected="true"/>
-                <ToggleButton fx:id="tbShowChipBounds" text="Chip"/>
+                <CheckBox fx:id="alwaysOnTopCheck" text="Always on Top"/>
 
                 <Separator orientation="VERTICAL"/>
 
                 <Label text="Zoom:"/>
-                <Slider fx:id="zoomSlider" min="0.1" max="8.0" value="1.0" prefWidth="160"/>
-                <Button text="100% (1x)" onAction="#onZoom1x"/>
+                <Slider fx:id="zoomSlider" min="0.1" max="8.0" value="1.0" prefWidth="120"/>
+                <TextField fx:id="zoomField" prefWidth="60"/>
+                <Button text="100%" onAction="#onZoom1x"/>
                 <Button text="Fit" onAction="#onFit"/>
-                <Button text="Export PNG" onAction="#onExportPng"/>
 
                 <Separator orientation="VERTICAL"/>
 
                 <Label text="Anim:"/>
-                <ComboBox fx:id="animSelector" prefWidth="200"/>
+                <ComboBox fx:id="animSelector" prefWidth="180"/>
                 <Button text="▶" onAction="#onPlay"/>
                 <Button text="⏹" onAction="#onStop"/>
                 <Label text="FPS:"/>
-                <Slider fx:id="fpsSlider" min="5" max="60" value="30" prefWidth="120"/>
+                <Slider fx:id="fpsSlider" min="1" max="60" value="2" prefWidth="100"/>
+                <TextField fx:id="fpsField" prefWidth="50"/>
+
+                <Pane HBox.hgrow="ALWAYS"/> <!-- Spacer -->
+
+                <Button text="Export PNG" onAction="#onExportPng"/>
             </ToolBar>
         </VBox>
     </top>
 
     <left>
-        <!-- MODIFIED: Replaced VBox with a SplitPane for top/bottom sections -->
-        <SplitPane dividerPositions="0.4" orientation="VERTICAL" BorderPane.alignment="CENTER">
-            <items>
-                <ListView fx:id="spmListView"/>
-                <Accordion>
-                    <panes>
-                        <TitledPane text="Pages">
-                            <content>
-                                <VBox>
-                                    <children>
-                                        <TreeView fx:id="pageTree" VBox.vgrow="ALWAYS"/>
-                                    </children>
-                                </VBox>
-                            </content>
-                        </TitledPane>
-                        <TitledPane text="Animations">
-                            <content>
-                                <VBox>
-                                    <children>
-                                        <TreeView fx:id="animTree" VBox.vgrow="ALWAYS"/>
-                                    </children>
-                                </VBox>
-                            </content>
-                        </TitledPane>
-                        <TitledPane text="Images">
-                            <content>
-                                <VBox>
-                                    <children>
-                                        <ListView fx:id="imageList" VBox.vgrow="ALWAYS"/>
-                                    </children>
-                                </VBox>
-                            </content>
-                        </TitledPane>
-                    </panes>
-                </Accordion>
-            </items>
-        </SplitPane>
+        <!-- ADDED: VBox to hold search field and the split pane -->
+        <VBox prefWidth="250.0" BorderPane.alignment="CENTER">
+            <children>
+                <TextField fx:id="searchField" promptText="Search files...">
+                    <VBox.margin>
+                        <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
+                    </VBox.margin>
+                </TextField>
+                <SplitPane dividerPositions="0.4" orientation="VERTICAL" VBox.vgrow="ALWAYS">
+                    <items>
+                        <ListView fx:id="spmListView"/>
+                        <Accordion>
+                            <panes>
+                                <TitledPane text="Pages">
+                                    <content>
+                                        <TreeView fx:id="pageTree"/>
+                                    </content>
+                                </TitledPane>
+                                <TitledPane text="Animations">
+                                    <content>
+                                        <TreeView fx:id="animTree"/>
+                                    </content>
+                                </TitledPane>
+                                <TitledPane text="Images">
+                                    <content>
+                                        <ListView fx:id="imageList"/>
+                                    </content>
+                                </TitledPane>
+                            </panes>
+                        </Accordion>
+                    </items>
+                </SplitPane>
+            </children>
+        </VBox>
     </left>
 
     <center>
@@ -125,18 +121,14 @@
                     <Tab text="Chips">
                         <content>
                             <TableView fx:id="chipTable">
-                                <placeholder>
-                                    <Label text="No chips"/>
-                                </placeholder>
+                                <placeholder><Label text="No chips"/></placeholder>
                             </TableView>
                         </content>
                     </Tab>
                     <Tab text="Hit Areas">
                         <content>
                             <TableView fx:id="hitTable">
-                                <placeholder>
-                                    <Label text="No hit areas"/>
-                                </placeholder>
+                                <placeholder><Label text="No hit areas"/></placeholder>
                             </TableView>
                         </content>
                     </Tab>
@@ -150,20 +142,13 @@
                                         </padding>
                                         <children>
                                             <Label text="SPM Version:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-                                            <Label fx:id="lblVersion" text="-" GridPane.columnIndex="1"
-                                                   GridPane.rowIndex="0"/>
-
+                                            <Label fx:id="lblVersion" text="-" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
                                             <Label text="Pages:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-                                            <Label fx:id="lblPages" text="-" GridPane.columnIndex="1"
-                                                   GridPane.rowIndex="1"/>
-
+                                            <Label fx:id="lblPages" text="-" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
                                             <Label text="Images:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-                                            <Label fx:id="lblImages" text="-" GridPane.columnIndex="1"
-                                                   GridPane.rowIndex="2"/>
-
+                                            <Label fx:id="lblImages" text="-" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
                                             <Label text="Animations:" GridPane.columnIndex="0" GridPane.rowIndex="3"/>
-                                            <Label fx:id="lblAnims" text="-" GridPane.columnIndex="1"
-                                                   GridPane.rowIndex="3"/>
+                                            <Label fx:id="lblAnims" text="-" GridPane.columnIndex="1" GridPane.rowIndex="3"/>
                                         </children>
                                     </GridPane>
                                 </content>
@@ -182,7 +167,6 @@
             </padding>
             <children>
                 <Label fx:id="statusLabel" text="Ready" HBox.hgrow="ALWAYS"/>
-                <!-- ADDED: ProgressBar for loading -->
                 <ProgressBar fx:id="progressBar" prefWidth="200.0" progress="0.0" visible="false"/>
             </children>
         </HBox>
