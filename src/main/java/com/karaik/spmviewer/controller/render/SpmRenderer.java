@@ -5,10 +5,12 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 public class SpmRenderer {
 
     // render
@@ -33,7 +35,8 @@ public class SpmRenderer {
             offY = -safe(page.getPageRect().getTop());
         }
 
-        drawChecker(g, safe(page.getPageWidth()), safe(page.getPageHeight()), offX, offY);
+        // MODIFIED: 调用了新的 drawChecker 方法，不再传递偏移量
+        drawChecker(g, safe(page.getPageWidth()), safe(page.getPageHeight()));
 
         var chips = Optional.ofNullable(page.getChipData()).orElse(List.of());
         for (Spm.SPMChipData c : chips) {
@@ -69,14 +72,13 @@ public class SpmRenderer {
         }
     }
 
-    // checker background
-    private void drawChecker(GraphicsContext g, int w, int h, int offX, int offY) {
+    private void drawChecker(GraphicsContext g, int w, int h) {
         int s = 16;
         for (int y = 0; y < h; y += s) {
             for (int x = 0; x < w; x += s) {
                 boolean odd = ((x / s) + (y / s)) % 2 == 1;
                 g.setFill(odd ? Color.gray(0.85) : Color.gray(0.92));
-                g.fillRect(offX + x, offY + y, s, s);
+                g.fillRect(x, y, s, s); // MODIFIED: 直接使用 x, y 坐标
             }
         }
     }

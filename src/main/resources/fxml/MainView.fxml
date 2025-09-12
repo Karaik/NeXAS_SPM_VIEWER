@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
@@ -12,8 +13,8 @@
                 <menus>
                     <Menu text="File">
                         <items>
-                            <MenuItem text="Open SPM…" onAction="#onOpenSpm"/>
-                            <MenuItem text="Open Image Folder…" onAction="#onOpenImages"/>
+                            <!-- MODIFIED: Changed menu items -->
+                            <MenuItem text="Open Directory..." onAction="#onOpenDirectory"/>
                             <SeparatorMenuItem/>
                             <MenuItem text="Export Canvas as PNG…" onAction="#onExportPng"/>
                             <SeparatorMenuItem/>
@@ -37,7 +38,7 @@
 
             <ToolBar>
                 <Label text="Page:"/>
-                <Spinner fx:id="pageSpinner" prefWidth="100"/>
+                <Spinner fx:id="pageSpinner" editable="true" prefWidth="100"/>
 
                 <Separator orientation="VERTICAL"/>
 
@@ -66,27 +67,43 @@
     </top>
 
     <left>
-        <VBox spacing="8" BorderPane.alignment="CENTER">
-            <Accordion VBox.vgrow="ALWAYS">
-                <panes>
-                    <TitledPane text="Pages">
-                        <content>
-                            <TreeView fx:id="pageTree"/>
-                        </content>
-                    </TitledPane>
-                    <TitledPane text="Animations">
-                        <content>
-                            <TreeView fx:id="animTree"/>
-                        </content>
-                    </TitledPane>
-                    <TitledPane text="Images">
-                        <content>
-                            <ListView fx:id="imageList"/>
-                        </content>
-                    </TitledPane>
-                </panes>
-            </Accordion>
-        </VBox>
+        <!-- MODIFIED: Replaced VBox with a SplitPane for top/bottom sections -->
+        <SplitPane dividerPositions="0.4" orientation="VERTICAL" BorderPane.alignment="CENTER">
+            <items>
+                <ListView fx:id="spmListView"/>
+                <Accordion>
+                    <panes>
+                        <TitledPane text="Pages">
+                            <content>
+                                <VBox>
+                                    <children>
+                                        <TreeView fx:id="pageTree" VBox.vgrow="ALWAYS"/>
+                                    </children>
+                                </VBox>
+                            </content>
+                        </TitledPane>
+                        <TitledPane text="Animations">
+                            <content>
+                                <VBox>
+                                    <children>
+                                        <TreeView fx:id="animTree" VBox.vgrow="ALWAYS"/>
+                                    </children>
+                                </VBox>
+                            </content>
+                        </TitledPane>
+                        <TitledPane text="Images">
+                            <content>
+                                <VBox>
+                                    <children>
+                                        <ListView fx:id="imageList" VBox.vgrow="ALWAYS"/>
+                                    </children>
+                                </VBox>
+                            </content>
+                        </TitledPane>
+                    </panes>
+                </Accordion>
+            </items>
+        </SplitPane>
     </left>
 
     <center>
@@ -108,14 +125,18 @@
                     <Tab text="Chips">
                         <content>
                             <TableView fx:id="chipTable">
-                                <placeholder><Label text="No chips"/></placeholder>
+                                <placeholder>
+                                    <Label text="No chips"/>
+                                </placeholder>
                             </TableView>
                         </content>
                     </Tab>
                     <Tab text="Hit Areas">
                         <content>
                             <TableView fx:id="hitTable">
-                                <placeholder><Label text="No hit areas"/></placeholder>
+                                <placeholder>
+                                    <Label text="No hit areas"/>
+                                </placeholder>
                             </TableView>
                         </content>
                     </Tab>
@@ -128,17 +149,21 @@
                                             <Insets topRightBottomLeft="10"/>
                                         </padding>
                                         <children>
-                                            <Label text="SPM Version:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
-                                            <Label fx:id="lblVersion" text="-" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+                                            <Label text="SPM Version:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                                            <Label fx:id="lblVersion" text="-" GridPane.columnIndex="1"
+                                                   GridPane.rowIndex="0"/>
 
-                                            <Label text="Pages:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
-                                            <Label fx:id="lblPages" text="-" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+                                            <Label text="Pages:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                                            <Label fx:id="lblPages" text="-" GridPane.columnIndex="1"
+                                                   GridPane.rowIndex="1"/>
 
-                                            <Label text="Images:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
-                                            <Label fx:id="lblImages" text="-" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+                                            <Label text="Images:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                                            <Label fx:id="lblImages" text="-" GridPane.columnIndex="1"
+                                                   GridPane.rowIndex="2"/>
 
-                                            <Label text="Animations:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
-                                            <Label fx:id="lblAnims" text="-" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                                            <Label text="Animations:" GridPane.columnIndex="0" GridPane.rowIndex="3"/>
+                                            <Label fx:id="lblAnims" text="-" GridPane.columnIndex="1"
+                                                   GridPane.rowIndex="3"/>
                                         </children>
                                     </GridPane>
                                 </content>
@@ -151,12 +176,14 @@
     </right>
 
     <bottom>
-        <HBox spacing="10">
+        <HBox alignment="CENTER_LEFT" spacing="10">
             <padding>
                 <Insets topRightBottomLeft="8"/>
             </padding>
             <children>
-                <Label fx:id="statusLabel" text="Ready"/>
+                <Label fx:id="statusLabel" text="Ready" HBox.hgrow="ALWAYS"/>
+                <!-- ADDED: ProgressBar for loading -->
+                <ProgressBar fx:id="progressBar" prefWidth="200.0" progress="0.0" visible="false"/>
             </children>
         </HBox>
     </bottom>
