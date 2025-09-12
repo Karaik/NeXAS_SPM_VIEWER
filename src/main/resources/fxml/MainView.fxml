@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.karaik.spmviewer.controller.MainViewController">
+
+    <top>
+        <VBox spacing="4">
+            <MenuBar>
+                <menus>
+                    <Menu text="File">
+                        <items>
+                            <MenuItem text="Open SPM…" onAction="#onOpenSpm"/>
+                            <MenuItem text="Open Image Folder…" onAction="#onOpenImages"/>
+                            <SeparatorMenuItem/>
+                            <MenuItem text="Export Canvas as PNG…" onAction="#onExportPng"/>
+                            <SeparatorMenuItem/>
+                            <MenuItem text="Quit" onAction="#onQuit"/>
+                        </items>
+                    </Menu>
+                    <Menu text="View">
+                        <items>
+                            <CheckMenuItem text="Show Page Rect" selected="true" fx:id="miShowPageRect"/>
+                            <CheckMenuItem text="Show Hit Areas" selected="true" fx:id="miShowHit"/>
+                            <CheckMenuItem text="Show Chip Bounds" fx:id="miShowChipBounds"/>
+                        </items>
+                    </Menu>
+                    <Menu text="Help">
+                        <items>
+                            <MenuItem text="About" onAction="#onAbout"/>
+                        </items>
+                    </Menu>
+                </menus>
+            </MenuBar>
+
+            <ToolBar>
+                <Label text="Page:"/>
+                <Spinner fx:id="pageSpinner" prefWidth="100"/>
+
+                <Separator orientation="VERTICAL"/>
+
+                <ToggleButton fx:id="tbShowPageRect" text="Page Rect" selected="true"/>
+                <ToggleButton fx:id="tbShowHit" text="Hit" selected="true"/>
+                <ToggleButton fx:id="tbShowChipBounds" text="Chip"/>
+
+                <Separator orientation="VERTICAL"/>
+
+                <Label text="Zoom:"/>
+                <Slider fx:id="zoomSlider" min="0.1" max="8.0" value="1.0" prefWidth="160"/>
+                <Button text="100% (1x)" onAction="#onZoom1x"/>
+                <Button text="Fit" onAction="#onFit"/>
+                <Button text="Export PNG" onAction="#onExportPng"/>
+
+                <Separator orientation="VERTICAL"/>
+
+                <Label text="Anim:"/>
+                <ComboBox fx:id="animSelector" prefWidth="200"/>
+                <Button text="▶" onAction="#onPlay"/>
+                <Button text="⏹" onAction="#onStop"/>
+                <Label text="FPS:"/>
+                <Slider fx:id="fpsSlider" min="5" max="60" value="30" prefWidth="120"/>
+            </ToolBar>
+        </VBox>
+    </top>
+
+    <left>
+        <VBox spacing="8" BorderPane.alignment="CENTER">
+            <Accordion VBox.vgrow="ALWAYS">
+                <panes>
+                    <TitledPane text="Pages">
+                        <content>
+                            <TreeView fx:id="pageTree"/>
+                        </content>
+                    </TitledPane>
+                    <TitledPane text="Animations">
+                        <content>
+                            <TreeView fx:id="animTree"/>
+                        </content>
+                    </TitledPane>
+                    <TitledPane text="Images">
+                        <content>
+                            <ListView fx:id="imageList"/>
+                        </content>
+                    </TitledPane>
+                </panes>
+            </Accordion>
+        </VBox>
+    </left>
+
+    <center>
+        <ScrollPane fx:id="scrollPane" pannable="true" fitToWidth="true" fitToHeight="true">
+            <content>
+                <StackPane fx:id="canvasHolder">
+                    <padding>
+                        <Insets topRightBottomLeft="8"/>
+                    </padding>
+                </StackPane>
+            </content>
+        </ScrollPane>
+    </center>
+
+    <right>
+        <VBox spacing="8" BorderPane.alignment="CENTER">
+            <TabPane fx:id="rightTabs" tabClosingPolicy="UNAVAILABLE" prefWidth="420" VBox.vgrow="ALWAYS">
+                <tabs>
+                    <Tab text="Chips">
+                        <content>
+                            <TableView fx:id="chipTable">
+                                <placeholder><Label text="No chips"/></placeholder>
+                            </TableView>
+                        </content>
+                    </Tab>
+                    <Tab text="Hit Areas">
+                        <content>
+                            <TableView fx:id="hitTable">
+                                <placeholder><Label text="No hit areas"/></placeholder>
+                            </TableView>
+                        </content>
+                    </Tab>
+                    <Tab text="Info">
+                        <content>
+                            <ScrollPane fitToWidth="true">
+                                <content>
+                                    <GridPane hgap="10" vgap="6">
+                                        <padding>
+                                            <Insets topRightBottomLeft="10"/>
+                                        </padding>
+                                        <children>
+                                            <Label text="SPM Version:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                                            <Label fx:id="lblVersion" text="-" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+                                            <Label text="Pages:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                                            <Label fx:id="lblPages" text="-" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+                                            <Label text="Images:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                                            <Label fx:id="lblImages" text="-" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+                                            <Label text="Animations:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                                            <Label fx:id="lblAnims" text="-" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                                        </children>
+                                    </GridPane>
+                                </content>
+                            </ScrollPane>
+                        </content>
+                    </Tab>
+                </tabs>
+            </TabPane>
+        </VBox>
+    </right>
+
+    <bottom>
+        <HBox spacing="10">
+            <padding>
+                <Insets topRightBottomLeft="8"/>
+            </padding>
+            <children>
+                <Label fx:id="statusLabel" text="Ready"/>
+            </children>
+        </HBox>
+    </bottom>
+</BorderPane>
