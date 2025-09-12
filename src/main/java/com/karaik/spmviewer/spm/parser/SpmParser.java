@@ -1,28 +1,17 @@
 package com.karaik.spmviewer.spm.parser;
 
-import com.giga.nexas.dto.bsdx.BsdxParser;
-import com.giga.nexas.dto.bsdx.spm.Spm;
-import com.giga.nexas.io.BinaryReader;
+
+import com.karaik.spmviewer.io.BinaryReader;
+import com.karaik.spmviewer.spm.Spm;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * @Author 这位同学(Karaik)
- * @Date 2025/4/21
- * @Description SpmParser
- */
-public class SpmParser implements BsdxParser<Spm> {
+public class SpmParser {
 
     private static final String SPM_VERSION_202 = "SPM VER-2.02";
     private static String currentVersion;
 
-    @Override
-    public String supportExtension() {
-        return "spm";
-    }
-
-    @Override
     public Spm parse(byte[] data, String filename, String charset) {
         BinaryReader reader = new BinaryReader(data, charset);
         Spm spm = new Spm();

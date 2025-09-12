@@ -1,19 +1,11 @@
 package com.karaik.spmviewer.spm;
 
-import com.giga.nexas.dto.bsdx.Bsdx;
 import lombok.Data;
 
 import java.util.List;
 
-/**
- * @Author 这位同学(Karaik)
- * @Date 2025/3/14
- * @Description Spm
- * 参考自
- * https://github.com/koukdw/Aquarium_tools/blob/main/research/fileformats.md
- */
 @Data
-public class Spm extends Bsdx {
+public class Spm {
 
     private String spmVersion;
     private Integer numPageData;
