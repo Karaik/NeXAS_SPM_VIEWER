@@ -3,14 +3,17 @@ package com.karaik.spmviewer.spm.parser.version;
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
 import com.karaik.spmviewer.spm.parser.HitboxFactory;
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 默认的 SPM "方言"解析器实现。
- * 提供了对最常见或基础版本 SPM 文件的解析逻辑。
+ * 方言 A (bhe) 解析器: SPM VER-2.00 的多态 Hitbox 版本。
+ * 这是最灵活的默认实现。
  */
-public class DefaultSpmParser implements SpmVersionParser {
+@Slf4j
+public class BheSpmParser implements SpmVersionParser {
 
     @Override
     public Spm.SPMPageData parsePageData(BinaryReader reader) {
@@ -66,7 +69,7 @@ public class DefaultSpmParser implements SpmVersionParser {
     }
 
     /**
-     * 解析多态的 HitArea。这是新架构的核心。
+     * 解析多态的 HitArea。这是方言 A 的核心。
      */
     @Override
     public Spm.SPMHitArea parseHitArea(BinaryReader reader) {
@@ -85,7 +88,7 @@ public class DefaultSpmParser implements SpmVersionParser {
 
             return hitbox;
         } catch (Exception e) {
-            System.err.println("parse HitArea failed: " + e.getMessage());
+            log.error("Failed to parse polymorphic HitArea: " + e.getMessage());
             // 返回一个安全的空对象，避免程序崩溃
             return new com.karaik.spmviewer.spm.hitarea.CRect();
         }

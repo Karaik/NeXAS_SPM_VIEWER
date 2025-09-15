@@ -45,7 +45,12 @@ public class CanvasController {
         this.currentPageIndex = index;
     }
 
-    public void renderPage() {
+    /**
+     * 渲染当前选定的页面，并根据传入的选项决定是否绘制额外信息。
+     * @param showCoords  是否显示坐标系
+     * @param showHitboxes 是否显示Hitbox
+     */
+    public void renderPage(boolean showCoords, boolean showHitboxes) {
         if (currentSpm == null || currentPageIndex < 0 || currentSpm.getPageData() == null || currentPageIndex >= currentSpm.getPageData().size()) {
             clearCanvas();
             return;
@@ -60,11 +65,11 @@ public class CanvasController {
             canvas.setHeight(h);
         }
 
-        renderer.render(canvas, currentSpm, currentPageIndex, loadedImages);
+        renderer.render(canvas, currentSpm, currentPageIndex, loadedImages, showCoords, showHitboxes);
     }
 
     public void previewImage(int imageIndex, String imageName) {
-        this.currentPageIndex = -1; // Not in page view mode
+        this.currentPageIndex = -1;
         if (imageIndex < 0 || imageIndex >= loadedImages.size()) return;
 
         Image img = loadedImages.get(imageIndex);

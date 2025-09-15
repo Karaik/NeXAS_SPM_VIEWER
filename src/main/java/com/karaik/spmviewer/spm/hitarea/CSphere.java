@@ -2,6 +2,7 @@ package com.karaik.spmviewer.spm.hitarea;
 
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
+import javafx.scene.canvas.GraphicsContext;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -24,5 +25,10 @@ public class CSphere extends Spm.SPMHitArea {
     @Override
     public String getDisplayInfo() {
         return String.format("Sphere (unk: %d, %d, %d, %d)", int1, int2, int3, int4);
+    }
+
+    @Override
+    public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
+
     }
 }

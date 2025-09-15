@@ -2,6 +2,7 @@ package com.karaik.spmviewer.spm.hitarea;
 
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
+import javafx.scene.canvas.GraphicsContext;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -28,5 +29,10 @@ public class DefaultHitArea extends Spm.SPMHitArea {
     @Override
     public String getDisplayInfo() {
         return String.format("DefaultHitArea (x: %d-%d, y: %d-%d, z: %d-%d)", xMin, xMax, yMin, yMax, zMin, zMax);
+    }
+
+    @Override
+    public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
+
     }
 }

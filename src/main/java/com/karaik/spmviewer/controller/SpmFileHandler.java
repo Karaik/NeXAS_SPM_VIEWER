@@ -10,6 +10,7 @@ import javafx.scene.control.ProgressBar;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Window;
 import lombok.extern.slf4j.Slf4j;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,7 +22,6 @@ import java.util.stream.Stream;
 
 @Slf4j
 public class SpmFileHandler {
-    // ... 构造函数和 getter 不变 ...
 
     private final ObservableList<SpmEntry> spmList;
     private final ProgressBar progressBar;
@@ -41,9 +41,18 @@ public class SpmFileHandler {
         return currentDirectory;
     }
 
+    /**
+     * 当用户切换解析模式时调用此方法，以重新加载当前目录。
+     */
+    public void reloadDirectory() {
+        if (currentDirectory != null && Files.isDirectory(currentDirectory)) {
+            loadDirectory(currentDirectory);
+        }
+    }
+
     public void openSpmDirectory(Window owner) {
         var dc = new DirectoryChooser();
-        dc.setTitle("打开包含SPM文件的目录");
+        dc.setTitle("Open Directory with SPM files");
         String lastDir = Settings.getLastDirectory();
         if (lastDir != null) {
             File initialDir = new File(lastDir);
@@ -59,29 +68,34 @@ public class SpmFileHandler {
 
     public void loadDirectory(Path directory) {
         if (directory == null || !Files.isDirectory(directory)) return;
+
         this.currentDirectory = directory;
         Settings.setLastDirectory(currentDirectory.toAbsolutePath().toString());
 
-        Task<List<SpmEntry>> loadTask = createLoadTask(currentDirectory);
+        final Settings.ParsingMode selectedMode = Settings.getParsingMode();
+        Task<List<SpmEntry>> loadTask = createLoadTask(currentDirectory, selectedMode);
+
         progressBar.progressProperty().bind(loadTask.progressProperty());
         progressBar.setVisible(true);
 
         loadTask.setOnSucceeded(e -> {
             spmList.setAll(loadTask.getValue());
-            statusLabel.setText("从 " + currentDirectory.getFileName() + " 加载了 " + spmList.size() + " 个SPM文件");
+            statusLabel.setText("Loaded " + spmList.size() + " SPM files from " + currentDirectory.getFileName());
             progressBar.progressProperty().unbind();
             progressBar.setVisible(false);
         });
+
         loadTask.setOnFailed(e -> {
-            log.error("加载SPM目录失败", loadTask.getException());
-            statusLabel.setText("加载目录时出错。");
+            log.error("Failed to load SPM directory", loadTask.getException());
+            statusLabel.setText("Error loading directory.");
             progressBar.progressProperty().unbind();
             progressBar.setVisible(false);
         });
+
         new Thread(loadTask).start();
     }
 
-    private Task<List<SpmEntry>> createLoadTask(Path directory) {
+    private Task<List<SpmEntry>> createLoadTask(Path directory, Settings.ParsingMode mode) {
         return new Task<>() {
             @Override
             protected List<SpmEntry> call() throws Exception {
@@ -92,9 +106,10 @@ public class SpmFileHandler {
                             .collect(Collectors.toList());
                 }
                 if (spmFiles.isEmpty()) {
-                    updateMessage("在此目录中未找到 .spm 文件。");
+                    updateMessage("No .spm files found in this directory.");
                     return Collections.emptyList();
                 }
+
                 final int total = spmFiles.size();
                 List<SpmEntry> results = new ArrayList<>(total);
                 var parser = new SpmParser();
@@ -102,15 +117,16 @@ public class SpmFileHandler {
                 for (int i = 0; i < total; i++) {
                     Path spmPath = spmFiles.get(i);
                     updateProgress(i + 1.0, total);
-                    updateMessage("正在加载: " + spmPath.getFileName());
+                    updateMessage("Loading: " + spmPath.getFileName());
 
                     SpmEntry entry = new SpmEntry(spmPath);
                     try {
                         byte[] data = Files.readAllBytes(spmPath);
-                        entry.setSpm(parser.parse(data, spmPath.getFileName().toString(), Settings.getCharsetName()));
+                        // 将解析模式传递给解析器
+                        entry.setSpm(parser.parse(data, spmPath.getFileName().toString(), Settings.getCharsetName(), mode));
                         entry.setStatus(SpmEntry.Status.SUCCESS);
                     } catch (Exception ex) {
-                        log.warn("解析SPM文件失败: {}", spmPath, ex);
+                        log.warn("Failed to parse SPM file: {}", spmPath, ex);
                         entry.setStatus(SpmEntry.Status.FAILED);
                         entry.setErrorMessage(ex.getMessage());
                     }

@@ -2,6 +2,7 @@ package com.karaik.spmviewer.spm.hitarea;
 
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
+import javafx.scene.canvas.GraphicsContext;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -25,5 +26,10 @@ public class CRect extends Spm.SPMHitArea {
     public String getDisplayInfo() {
         if (rect == null) return "Rect (incomplete)";
         return String.format("Rect [%d, %d, %d, %d]", rect.getLeft(), rect.getTop(), rect.getRight(), rect.getBottom());
+    }
+
+    @Override
+    public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
+
     }
 }

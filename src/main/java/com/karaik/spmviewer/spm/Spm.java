@@ -1,14 +1,11 @@
 package com.karaik.spmviewer.spm;
 
 import com.karaik.spmviewer.io.BinaryReader;
+import javafx.scene.canvas.GraphicsContext;
 import lombok.Data;
 
 import java.util.List;
 
-/**
- * SPM 文件的顶层数据模型。
- * 包含了所有解析出的数据块。
- */
 @Data
 public class Spm {
 
@@ -37,7 +34,7 @@ public class Spm {
         private Integer chipHeight;
         private SPMRect srcRect;
         private Long drawOption;
-        private byte unk5; // 仅在特定版本中由解析器填充
+        private byte unk5;
         private Long drawOptionValue;
         private Integer option;
     }
@@ -52,37 +49,28 @@ public class Spm {
         private Integer rotateCenterX;
         private Integer rotateCenterY;
         private Long hitFlag;
-        private byte unk3; // 仅在特定版本中由解析器填充
+        private byte unk3;
         private List<SPMHitArea> hitRects;
         private List<SPMChipData> chipData;
     }
 
-    /**
-     * 碰撞区域（HitArea）的抽象基类。
-     * 不同的形状（矩形、圆形等）继承自此类。
-     */
     @Data
     public static abstract class SPMHitArea {
-        /** 碰撞区域的 ID */
         private short id;
-        /** 形状类型，用于决定具体的子类 */
         private short shapeType;
 
-        /**
-         * 从二进制流中读取该形状特有的数据。
-         * 每个子类都需要实现此方法。
-         *
-         * @param reader 二进制读取器
-         * @throws Exception 读取时可能发生错误
-         */
         public abstract void readInfo(BinaryReader reader) throws Exception;
 
-        /**
-         * 获取用于在UI中显示的描述信息。
-         *
-         * @return 描述性字符串
-         */
         public abstract String getDisplayInfo();
+
+        /**
+         * 在Canvas上绘制自身的形状。
+         *
+         * @param g           JavaFX的绘图上下文
+         * @param pageOriginX 页面原点在画布上的X坐标
+         * @param pageOriginY 页面原点在画布上的Y坐标
+         */
+        public abstract void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY);
     }
 
     @Data

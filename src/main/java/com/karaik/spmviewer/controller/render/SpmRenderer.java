@@ -13,11 +13,21 @@ import java.util.Optional;
 @Slf4j
 public class SpmRenderer {
 
-    // MODIFIED: Removed boolean parameters for view options
+    /**
+     * 渲染一个SPM页面到Canvas上。
+     * @param canvas       目标画布
+     * @param spm          当前SPM数据对象
+     * @param pageIndex    要渲染的页面索引
+     * @param images       已加载的图片列表
+     * @param showCoords   是否显示坐标系
+     * @param showHitboxes 是否显示Hitbox
+     */
     public void render(Canvas canvas,
                        Spm spm,
                        int pageIndex,
-                       List<Image> images) {
+                       List<Image> images,
+                       boolean showCoords,
+                       boolean showHitboxes) {
 
         GraphicsContext g = canvas.getGraphicsContext2D();
         g.setFill(Color.rgb(30, 30, 30));
@@ -25,6 +35,7 @@ public class SpmRenderer {
 
         Spm.SPMPageData page = spm.getPageData().get(pageIndex);
 
+        // 计算页面的偏移量，使得页面的(0,0)点能够正确地映射到画布上
         int offX = 0;
         int offY = 0;
         if (page.getPageRect() != null) {
@@ -45,8 +56,40 @@ public class SpmRenderer {
             g.drawImage(img, src.x, src.y, src.w, src.h, offX + dst.x, offY + dst.y, dst.w, dst.h);
         }
 
-        // NOTE: The rendering for page rect, hit areas, and chip bounds has been removed.
-        // If you want to re-add them later, they would go here.
+        // 计算页面的物理中心点（原点）在画布上的位置
+        double originX = offX + safe(page.getRotateCenterX());
+        double originY = offY + safe(page.getRotateCenterY());
+
+        // 如果用户要求，绘制坐标系
+        if (showCoords) {
+            drawCoordinateSystem(g, originX, originY);
+        }
+
+        // 如果用户要求，绘制Hitboxes
+        if (showHitboxes) {
+            var hitboxes = Optional.ofNullable(page.getHitRects()).orElse(List.of());
+            for (Spm.SPMHitArea hitbox : hitboxes) {
+                // 利用多态，让每个hitbox自己绘制自己
+                hitbox.drawSelf(g, originX, originY);
+            }
+        }
+    }
+
+    /**
+     * 在指定的原点绘制十字坐标轴。
+     */
+    private void drawCoordinateSystem(GraphicsContext g, double originX, double originY) {
+        g.setStroke(Color.YELLOW);
+        g.setLineWidth(1.0);
+
+        // 绘制X轴
+        g.strokeLine(originX - 1000, originY, originX + 1000, originY);
+        // 绘制Y轴
+        g.strokeLine(originX, originY - 1000, originX, originY + 1000);
+
+        // 绘制一个小圆点标记原点
+        g.setFill(Color.YELLOW);
+        g.fillOval(originX - 2, originY - 2, 4, 4);
     }
 
     private void drawChecker(GraphicsContext g, int w, int h) {

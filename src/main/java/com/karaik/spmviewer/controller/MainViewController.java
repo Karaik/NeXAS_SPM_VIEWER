@@ -24,6 +24,7 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 import javafx.util.converter.NumberStringConverter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -34,13 +35,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * 主界面视图的控制器。
- * 负责处理所有UI事件、状态管理和与后端逻辑的交互。
- */
+@Slf4j
 public class MainViewController {
 
     //<editor-fold desc="FXML 控件注入">
+    @FXML private ComboBox<Settings.ParsingMode> parsingModeSelector;
+    @FXML private CheckBox showCoordsCheck;
+    @FXML private CheckBox showHitboxCheck;
     @FXML private TextField searchField;
     @FXML private Slider zoomSlider;
     @FXML private TextField zoomField;
@@ -63,56 +64,34 @@ public class MainViewController {
     @FXML private TextField animSearchField;
     //</editor-fold>
 
-    // 业务逻辑控制器
     private SpmFileHandler spmFileHandler;
     private UiStateController uiStateController;
     private CanvasController canvasController;
-
-    // 动画播放器
     private Timeline animTimeline;
-
-    // 拖拽平移相关变量
     private double dragStartX, dragStartY, hValStart, vValStart;
-
-    // 数据模型
     private final ObservableList<SpmEntry> masterSpmList = FXCollections.observableArrayList();
-
-    // 状态变量，防止对同一文件重复加载
     private SpmEntry currentlyLoadingSpm = null;
+    private long loadGen = 0;
 
-    /**
-     * FXML 初始化方法，在加载 FXML 文件后自动调用。
-     */
     @FXML
     public void initialize() {
-        // 初始化各个模块
         setupCanvas();
         setupControllers();
         setupUIComponents();
-
-        // 加载上次使用的目录
         loadLastDirectory();
     }
 
-    /**
-     * 初始化 Canvas 和缩放相关的设置。
-     */
     private void setupCanvas() {
         final Scale scale = new Scale(1, 1, 0, 0);
         final Group canvasGroup = new Group();
         canvasController = new CanvasController(new javafx.scene.canvas.Canvas(), canvasGroup, scale);
         canvasHolder.getChildren().add(canvasGroup);
-
-        // 绑定缩放滑块与 Canvas 的缩放变换
         zoomSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
             scale.setX(newVal.doubleValue());
             scale.setY(newVal.doubleValue());
         });
     }
 
-    /**
-     * 初始化后端的业务逻辑控制器。
-     */
     private void setupControllers() {
         spmFileHandler = new SpmFileHandler(masterSpmList, progressBar, statusLabel);
         uiStateController = new UiStateController(
@@ -122,25 +101,42 @@ public class MainViewController {
         );
     }
 
-    /**
-     * 初始化所有UI组件的事件监听、绑定和初始状态。
-     */
     private void setupUIComponents() {
+        setupParsingModeSelector();
+        setupDisplayOptionListeners();
         setupSpmListCellFactory();
         setupActionListeners();
         setupCanvasInteractions();
         setupValueBindings();
         setupFiltering();
         setupExpandAllContextMenus();
-
         uiStateController.clearAllPanels();
         canvasController.clearCanvas();
     }
 
     /**
-     * 设置 SPM 文件列表的单元格工厂，用于自定义显示。
-     * 失败的条目会显示为红色，并有错误提示。
+     * 初始化用于选择SPM解析方言的下拉框。
      */
+    private void setupParsingModeSelector() {
+        parsingModeSelector.getItems().setAll(Settings.ParsingMode.values());
+        parsingModeSelector.setValue(Settings.getParsingMode());
+        parsingModeSelector.valueProperty().addListener((obs, oldMode, newMode) -> {
+            if (newMode != null) {
+                Settings.setParsingMode(newMode);
+                spmFileHandler.reloadDirectory();
+            }
+        });
+    }
+
+    /**
+     * 为“显示坐标系”和“显示Hitbox”复选框添加监听器。
+     * 当它们的状态改变时，触发画布的重绘。
+     */
+    private void setupDisplayOptionListeners() {
+        showCoordsCheck.selectedProperty().addListener((obs, oldVal, newVal) -> renderCurrentPage());
+        showHitboxCheck.selectedProperty().addListener((obs, oldVal, newVal) -> renderCurrentPage());
+    }
+
     private void setupSpmListCellFactory() {
         spmListView.setCellFactory(lv -> new ListCell<>() {
             @Override
@@ -148,13 +144,13 @@ public class MainViewController {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
                     setText(null);
-                    setDisable(false); // 确保空单元格可交互
+                    setDisable(false);
                 } else {
                     setText(item.toString());
                     if (item.getStatus() == SpmEntry.Status.FAILED) {
                         setTextFill(Color.RED);
                         setTooltip(new Tooltip(item.getErrorMessage()));
-                        setDisable(true); // 失败的条目不可选
+                        setDisable(true);
                     } else {
                         setTextFill(Color.BLACK);
                         setTooltip(null);
@@ -165,11 +161,7 @@ public class MainViewController {
         });
     }
 
-    /**
-     * 统一设置所有控件的动作监听器。
-     */
     private void setupActionListeners() {
-        // SPM 文件列表：点击或键盘选择时加载文件
         spmListView.setOnMouseClicked(event -> handleSpmSelection());
         spmListView.setOnKeyReleased(event -> {
             if (event.getCode() == KeyCode.UP || event.getCode() == KeyCode.DOWN) {
@@ -177,15 +169,15 @@ public class MainViewController {
             }
         });
 
-        // SPM 主列表数据变化监听：自动选择第一个
         masterSpmList.addListener((ListChangeListener<SpmEntry>) c -> {
             if (!masterSpmList.isEmpty() && spmListView.getSelectionModel().getSelectedItem() == null) {
-                spmListView.getSelectionModel().selectFirst();
-                handleSpmSelection();
+                if (!spmListView.getItems().isEmpty()) {
+                    spmListView.getSelectionModel().selectFirst();
+                    handleSpmSelection();
+                }
             }
         });
 
-        // Page 树状列表：选择一个 page 进行渲染
         pageTree.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, item) -> {
             if (item != null && item.isLeaf()) {
                 try {
@@ -195,7 +187,6 @@ public class MainViewController {
             }
         });
 
-        // Animation 树状列表：选择动画中的一帧，会联动到 Page 和动画下拉框
         animTree.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, item) -> {
             if (item != null && item.isLeaf() && item.getValue().contains("pages=[")) {
                 try {
@@ -204,7 +195,6 @@ public class MainViewController {
                     if (!pageStr.isEmpty()) {
                         int pageToSelect = Integer.parseInt(pageStr.split(",")[0].trim());
                         selectPage(pageToSelect);
-
                         String animDisplayName = item.getParent().getValue();
                         animSelector.getSelectionModel().select(animDisplayName);
                     }
@@ -212,7 +202,6 @@ public class MainViewController {
             }
         });
 
-        // Image 列表：选择一个图片进行预览
         imageList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, item) -> {
             if (item != null) {
                 try {
@@ -222,18 +211,15 @@ public class MainViewController {
             }
         });
 
-        // 动画下拉框：选择后自动播放
         animSelector.setOnAction(e -> {
             if (animSelector.getValue() != null) onPlay();
         });
 
-        // "总在最前" 复选框
         alwaysOnTopCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
             Stage stage = (Stage) canvasHolder.getScene().getWindow();
             stage.setAlwaysOnTop(newVal);
         });
 
-        // 监听 Scene 变化，为其添加快捷键
         canvasHolder.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (newScene != null) {
                 setupKeyboardShortcuts(newScene);
@@ -241,11 +227,7 @@ public class MainViewController {
         });
     }
 
-    /**
-     * 设置画布的交互，如中键拖拽、滚轮缩放。
-     */
     private void setupCanvasInteractions() {
-        // 鼠标中键拖拽平移
         scrollPane.addEventFilter(MouseEvent.MOUSE_PRESSED, e -> {
             if (e.getButton() == MouseButton.MIDDLE) {
                 dragStartX = e.getSceneX();
@@ -265,7 +247,6 @@ public class MainViewController {
             }
         });
 
-        // Ctrl + 滚轮缩放
         scrollPane.addEventFilter(ScrollEvent.SCROLL, event -> {
             if (event.isControlDown()) {
                 double zoomFactor = event.getDeltaY() > 0 ? 1.1 : 1.0 / 1.1;
@@ -275,26 +256,17 @@ public class MainViewController {
         });
     }
 
-    /**
-     * 设置滑块和文本框之间的双向绑定。
-     */
     private void setupValueBindings() {
-        // 缩放滑块与文本框绑定
         NumberFormat zoomFormat = new DecimalFormat("0.0x");
         StringConverter<Number> zoomConverter = new NumberStringConverter(zoomFormat);
         zoomField.textProperty().bindBidirectional(zoomSlider.valueProperty(), zoomConverter);
 
-        // FPS滑块与文本框绑定
         NumberFormat fpsFormat = new DecimalFormat("0");
         StringConverter<Number> fpsConverter = new NumberStringConverter(fpsFormat);
         fpsField.textProperty().bindBidirectional(fpsSlider.valueProperty(), fpsConverter);
     }
 
-    /**
-     * 设置文件列表和动画列表的搜索过滤功能。
-     */
     private void setupFiltering() {
-        // SPM 文件搜索
         FilteredList<SpmEntry> filteredSpmList = new FilteredList<>(masterSpmList, p -> true);
         searchField.textProperty().addListener((obs, oldVal, newVal) -> {
             filteredSpmList.setPredicate(spmEntry -> {
@@ -304,7 +276,6 @@ public class MainViewController {
                 String lowerCaseFilter = newVal.toLowerCase();
                 return spmEntry.getPath().getFileName().toString().toLowerCase().contains(lowerCaseFilter);
             });
-            // 过滤后若无选中项，则自动选第一个
             if (spmListView.getSelectionModel().getSelectedItem() == null && !spmListView.getItems().isEmpty()) {
                 spmListView.getSelectionModel().selectFirst();
                 handleSpmSelection();
@@ -312,12 +283,10 @@ public class MainViewController {
         });
         spmListView.setItems(filteredSpmList);
 
-        // 动画搜索
         animSearchField.textProperty().addListener((obs, oldVal, newVal) -> {
             SpmEntry selectedSpm = spmListView.getSelectionModel().getSelectedItem();
             if (selectedSpm != null && selectedSpm.getSpm() != null) {
                 uiStateController.updateUiForSpm(selectedSpm.getSpm(), newVal);
-                // 搜索时自动展开动画面板
                 if (newVal != null && !newVal.trim().isEmpty()) {
                     animTitledPane.setExpanded(true);
                 }
@@ -325,9 +294,6 @@ public class MainViewController {
         });
     }
 
-    /**
-     * 为树状视图添加 "全部展开" 的右键菜单。
-     */
     private void setupExpandAllContextMenus() {
         setupExpandAllContextMenu(pageTree);
         setupExpandAllContextMenu(animTree);
@@ -335,7 +301,7 @@ public class MainViewController {
 
     private void setupExpandAllContextMenu(TreeView<?> treeView) {
         var contextMenu = new ContextMenu();
-        var expandAllItem = new MenuItem("全部展开");
+        var expandAllItem = new MenuItem("Expand All");
         expandAllItem.setOnAction(event -> {
             if (treeView.getRoot() != null) {
                 expandTreeView(treeView.getRoot(), true);
@@ -354,12 +320,8 @@ public class MainViewController {
         }
     }
 
-    /**
-     * 设置全局键盘快捷键。
-     */
     private void setupKeyboardShortcuts(Scene scene) {
         scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
-            // 播放/暂停媒体键切换动画
             if (event.getCode() == KeyCode.PLAY || event.getCode() == KeyCode.PAUSE) {
                 if (animTimeline != null && animTimeline.getStatus() == Timeline.Status.RUNNING) {
                     onStop();
@@ -371,9 +333,6 @@ public class MainViewController {
         });
     }
 
-    /**
-     * 加载上一次成功打开的目录。
-     */
     private void loadLastDirectory() {
         String lastDirPath = Settings.getLastDirectory();
         if (lastDirPath != null && !lastDirPath.isEmpty()) {
@@ -384,116 +343,90 @@ public class MainViewController {
         }
     }
 
-    /**
-     * 处理 SPM 列表的选择事件。
-     */
     private void handleSpmSelection() {
         SpmEntry selectedEntry = spmListView.getSelectionModel().getSelectedItem();
         loadAndDisplaySpm(selectedEntry);
     }
 
-    /**
-     * 异步加载并显示选定的 SPM 文件。
-     * 使用后台任务处理耗时的图片加载，避免UI卡顿。
-     *
-     * @param entry 要加载的 SpmEntry
-     */
     private void loadAndDisplaySpm(SpmEntry entry) {
-        // 如果正在加载的就是当前这个文件，则直接返回
-        if (entry == currentlyLoadingSpm) {
-            return;
-        }
-        currentlyLoadingSpm = entry;
+        final long myGen = ++loadGen; // 本次加载的世代号
 
-        onStop(); // 停止当前可能在播放的动画
+        onStop(); // 停止任何正在播放的动画
 
+        // 非法/未成功的条目：直接清空并退出
         if (entry == null || entry.getStatus() != SpmEntry.Status.SUCCESS) {
+            currentlyLoadingSpm = null;
             uiStateController.clearAllPanels();
             canvasController.clearCanvas();
-            currentlyLoadingSpm = null;
+            statusLabel.setText("Ready");
+            progressBar.setVisible(false);
             return;
         }
 
-        // 准备后台加载任务
-        Task<Void> loadTask = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                // 这是耗时操作：从磁盘加载所有关联的图片
-                canvasController.setCurrentSpm(entry.getSpm(), spmFileHandler.getCurrentDirectory());
-                return null;
-            }
-        };
+        currentlyLoadingSpm = entry;
 
-        // 任务成功后的UI更新
-        loadTask.setOnSucceeded(e -> {
-            uiStateController.updateUiForSpm(entry.getSpm(), null); // null表示全量更新
-
-            int pageCount = Optional.ofNullable(entry.getSpm().getNumPageData()).orElse(0);
-            if (pageCount > 0) {
-                selectPage(0); // 默认显示第一页
-            } else {
-                uiStateController.updateTablesForPage(null);
-                canvasController.clearCanvas();
-            }
-            statusLabel.setText("就绪");
-            progressBar.setVisible(false);
-            currentlyLoadingSpm = null; // 加载完成，重置状态
-        });
-
-        // 任务失败处理
-        loadTask.setOnFailed(e -> {
-            statusLabel.setText("加载失败: " + entry.getPath().getFileName());
-            progressBar.setVisible(false);
-            Throwable ex = loadTask.getException();
-            if (ex != null) {
-                ex.printStackTrace(); // 打印错误到控制台供调试
-            }
-            currentlyLoadingSpm = null;
-        });
-
-        // UI即时反馈：显示加载中状态
-        progressBar.progressProperty().unbind(); // 确保解绑，防止与目录加载冲突
-        statusLabel.setText("正在加载 " + entry.getPath().getFileName() + "...");
+        // UI：进入“加载中”状态
+        progressBar.progressProperty().unbind();
+        statusLabel.setText("Loading " + entry.getPath().getFileName() + "...");
         progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
         progressBar.setVisible(true);
         animSearchField.clear();
         uiStateController.clearAllPanels();
         canvasController.clearCanvas();
 
-        // 启动后台任务
-        new Thread(loadTask).start();
+        // 后台任务：只做耗时的IO/解析，避免访问FX线程对象
+        Task<Void> loadTask = new Task<>() {
+            @Override
+            protected Void call() {
+                canvasController.setCurrentSpm(entry.getSpm(), spmFileHandler.getCurrentDirectory());
+                return null;
+            }
+        };
+
+        loadTask.setOnSucceeded(e -> {
+            // 如果在此期间用户又点了别的文件，这次结果作废
+            if (myGen != loadGen) return;
+
+            uiStateController.updateUiForSpm(entry.getSpm(), null);
+            int pageCount = Optional.ofNullable(entry.getSpm().getNumPageData()).orElse(0);
+            if (pageCount > 0) {
+                selectPage(0);
+            } else {
+                uiStateController.updateTablesForPage(null);
+                canvasController.clearCanvas();
+            }
+            statusLabel.setText("Ready");
+            progressBar.setVisible(false);
+            currentlyLoadingSpm = null;
+        });
+
+        loadTask.setOnFailed(e -> {
+            if (myGen != loadGen) return;
+
+            Throwable ex = loadTask.getException();
+            log.error("Failed to load {}", entry.getPath().getFileName(), ex);
+            statusLabel.setText("Failed to load " + entry.getPath().getFileName());
+            progressBar.setVisible(false);
+            currentlyLoadingSpm = null;
+        });
+
+        Thread t = new Thread(loadTask, "spm-load-" + myGen);
+        t.setDaemon(true);
+        t.start();
     }
 
-    /**
-     * 选择并渲染指定的 Page。
-     *
-     * @param index Page 的索引
-     */
     private void selectPage(Integer index) {
         SpmEntry selectedSpm = spmListView.getSelectionModel().getSelectedItem();
-        if (selectedSpm == null || index == null) {
-            return;
-        }
-
+        if (selectedSpm == null || index == null) return;
         imageList.getSelectionModel().clearSelection();
-
         Spm spm = selectedSpm.getSpm();
         int pageCount = Optional.ofNullable(spm.getNumPageData()).orElse(0);
-        if (index < 0 || index >= pageCount) {
-            return;
-        }
-
+        if (index < 0 || index >= pageCount) return;
         canvasController.setCurrentPageIndex(index);
         uiStateController.updateTablesForPage(spm.getPageData().get(index));
-        canvasController.renderPage();
+        renderCurrentPage();
     }
 
-    /**
-     * 预览指定的 Image。
-     *
-     * @param index     Image 的索引
-     * @param imageName Image 的名称（用于显示错误信息）
-     */
     private void previewImage(int index, String imageName) {
         onStop();
         pageTree.getSelectionModel().clearSelection();
@@ -501,7 +434,13 @@ public class MainViewController {
         canvasController.previewImage(index, imageName);
     }
 
-    //<editor-fold desc="FXML Action Handlers">
+    private void renderCurrentPage() {
+        canvasController.renderPage(
+                showCoordsCheck.isSelected(),
+                showHitboxCheck.isSelected()
+        );
+    }
+
     @FXML private void onOpenDirectory() {
         spmFileHandler.openSpmDirectory(canvasHolder.getScene().getWindow());
     }
@@ -515,15 +454,13 @@ public class MainViewController {
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG", "*.png"));
         fc.setInitialFileName("spm-export.png");
         File out = fc.showSaveDialog(canvasHolder.getScene().getWindow());
-        if (out == null) {
-            return;
-        }
+        if (out == null) return;
         try {
             var snapshot = canvasController.getCanvas().snapshot(new SnapshotParameters(), null);
             javax.imageio.ImageIO.write(javafx.embed.swing.SwingFXUtils.fromFXImage(snapshot, null), "png", out);
-            statusLabel.setText("已导出: " + out.getName());
+            statusLabel.setText("Exported: " + out.getName());
         } catch (Exception ex) {
-            new Alert(Alert.AlertType.ERROR, "导出失败: " + ex.getMessage()).showAndWait();
+            new Alert(Alert.AlertType.ERROR, "Export failed: " + ex.getMessage()).showAndWait();
         }
     }
 
@@ -534,12 +471,12 @@ public class MainViewController {
     @FXML private void onShowShortcuts() {
         var alert = new Alert(Alert.AlertType.INFORMATION);
         alert.initOwner(canvasHolder.getScene().getWindow());
-        alert.setTitle("快捷键");
-        alert.setHeaderText("键盘与鼠标快捷操作");
+        alert.setTitle("Shortcuts");
+        alert.setHeaderText("Keyboard and Mouse Shortcuts");
         String content =
-                "播放/暂停媒体键: 切换动画播放/暂停\n\n" +
-                        "Ctrl + 鼠标滚轮: 缩放画布\n\n" +
-                        "鼠标中键拖拽: 平移画布";
+                "Play/Pause Media Key: Toggle animation playback\n\n" +
+                        "Ctrl + Mouse Scroll: Zoom in/out on the canvas\n\n" +
+                        "Middle Mouse Button Drag: Pan the canvas";
         alert.setContentText(content);
         alert.showAndWait();
     }
@@ -555,40 +492,27 @@ public class MainViewController {
     }
 
     @FXML private void onFit() {
-        // 暂未实现
+        // Not implemented
     }
 
     @FXML private void onPlay() {
         SpmEntry selectedSpmEntry = spmListView.getSelectionModel().getSelectedItem();
-        if (selectedSpmEntry == null || selectedSpmEntry.getSpm() == null) {
-            return;
-        }
-
+        if (selectedSpmEntry == null || selectedSpmEntry.getSpm() == null) return;
         String displayName = animSelector.getValue();
-        if (displayName == null) {
-            return;
-        }
-
-        onStop(); // 先停止之前的动画
-
+        if (displayName == null) return;
+        onStop();
         try {
-            // 从 "[索引] 名称" 格式中解析出动画索引
             int startIndex = displayName.indexOf('[') + 1;
             int endIndex = displayName.indexOf(']');
-            if (startIndex == 0 || endIndex == -1) return; // 格式不正确
-
+            if (startIndex == 0 || endIndex == -1) return;
             int animIndex = Integer.parseInt(displayName.substring(startIndex, endIndex));
             List<Spm.SPMAnimData> animDataList = selectedSpmEntry.getSpm().getAnimData();
-
-            if (animIndex < 0 || animIndex >= animDataList.size()) return; // 索引越界
-
+            if (animIndex < 0 || animIndex >= animDataList.size()) return;
             Spm.SPMAnimData anim = animDataList.get(animIndex);
 
-            // 构建并播放动画时间线
             List<KeyFrame> keyFrames = new ArrayList<>();
             int totalDuration = 0;
             int frameMillis = (int) (1000.0 / fpsSlider.getValue());
-
             for (Spm.SPMPatData pat : Optional.ofNullable(anim.getPatData()).orElse(List.of())) {
                 int waitFrames = Math.max(1, Optional.ofNullable(pat.getWaitFrame()).orElse(1));
                 for (Integer pageNo : Optional.ofNullable(pat.getPageNo()).orElse(List.of())) {
@@ -596,15 +520,12 @@ public class MainViewController {
                     keyFrames.add(new KeyFrame(Duration.millis(totalDuration), e -> selectPage(pageNo)));
                 }
             }
-
             if (keyFrames.isEmpty()) return;
-
             animTimeline = new Timeline(keyFrames.toArray(new KeyFrame[0]));
             animTimeline.setCycleCount(Timeline.INDEFINITE);
             animTimeline.play();
-
         } catch (NumberFormatException e) {
-            System.err.println("解析动画索引失败: " + displayName);
+            System.err.println("Failed to parse animation index: " + displayName);
         }
     }
 
@@ -614,5 +535,4 @@ public class MainViewController {
             animTimeline = null;
         }
     }
-    //</editor-fold>
 }

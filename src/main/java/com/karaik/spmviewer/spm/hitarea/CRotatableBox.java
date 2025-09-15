@@ -2,6 +2,7 @@ package com.karaik.spmviewer.spm.hitarea;
 
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
+import javafx.scene.canvas.GraphicsContext;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -35,5 +36,10 @@ public class CRotatableBox extends Spm.SPMHitArea {
     @Override
     public String getDisplayInfo() {
         return String.format("RotatableBox (property: %d)", attrU16);
+    }
+
+    @Override
+    public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
+
     }
 }

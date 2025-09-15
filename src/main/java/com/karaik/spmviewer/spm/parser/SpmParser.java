@@ -1,37 +1,41 @@
 package com.karaik.spmviewer.spm.parser;
 
 import com.karaik.spmviewer.io.BinaryReader;
+import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.spm.Spm;
 import com.karaik.spmviewer.spm.parser.version.SpmVersionParser;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * SPM 文件主解析器。
- * 负责整体的解析流程控制，具体的版本相关解析逻辑则委托给
- * 通过 {@link SpmParserFactory} 获取的特定“方言”解析器来完成。
- */
 public class SpmParser {
 
-    public Spm parse(byte[] data, String filename, String charset) {
+    /**
+     * 解析SPM文件字节数据。
+     *
+     * @param data     文件内容的字节数组
+     * @param filename 文件名
+     * @param charset  文件内字符串所使用的字符集
+     * @param mode     用户选择的解析模式（方言）
+     * @return 解析完成的 {@link Spm} 数据对象
+     */
+    public Spm parse(byte[] data, String filename, String charset, Settings.ParsingMode mode) {
         var reader = new BinaryReader(data, charset);
         var spm = new Spm();
 
-        // 1. 读取版本号，并据此获取对应的“方言”解析器
         String spmVersion = reader.readNullTerminatedString();
         spm.setSpmVersion(spmVersion);
-        SpmVersionParser versionParser = SpmParserFactory.getParserForVersion(spmVersion, filename);
 
-        // 2. 解析页面数据块
+        // 将版本号和用户选择的模式一起传递给工厂，以获取正确的“方言”解析器
+        SpmVersionParser versionParser = SpmParserFactory.getParserForMode(spmVersion, mode);
+
         spm.setNumPageData(reader.readInt());
         List<Spm.SPMPageData> pageDataList = new ArrayList<>();
         for (int i = 0; i < spm.getNumPageData(); i++) {
-            pageDataList.add(versionParser.parsePageData(reader)); // 委托
+            pageDataList.add(versionParser.parsePageData(reader));
         }
         spm.setPageData(pageDataList);
 
-        // 3. 解析图像数据块
         spm.setNumImageData(reader.readInt());
         List<Spm.SPMImageData> imageDataList = new ArrayList<>();
         for (int i = 0; i < spm.getNumImageData(); i++) {
@@ -39,7 +43,6 @@ public class SpmParser {
         }
         spm.setImageData(imageDataList);
 
-        // 4. 解析动画数据块
         spm.setPatPageNum(reader.readInt());
         spm.setNumAnimData(reader.readInt());
         List<Spm.SPMAnimData> animDataList = new ArrayList<>();
