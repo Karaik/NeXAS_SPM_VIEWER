@@ -14,9 +14,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 public class CanvasController {
+
+    private static final double FIXED_CANVAS_SIZE = 4096; // 一个足够大的固定尺寸
 
     private final Canvas canvas;
     private final SpmRenderer renderer = new SpmRenderer();
@@ -27,6 +28,8 @@ public class CanvasController {
 
     public CanvasController(Canvas canvas, Group canvasGroup, Scale scale) {
         this.canvas = canvas;
+        canvas.setWidth(FIXED_CANVAS_SIZE);
+        canvas.setHeight(FIXED_CANVAS_SIZE);
         canvas.getTransforms().add(scale);
         canvasGroup.getChildren().add(canvas);
     }
@@ -55,44 +58,35 @@ public class CanvasController {
             clearCanvas();
             return;
         }
-        var p = currentSpm.getPageData().get(currentPageIndex);
-
-        int w = Math.max(1, Optional.ofNullable(p.getPageWidth()).orElse(0));
-        int h = Math.max(1, Optional.ofNullable(p.getPageHeight()).orElse(0));
-
-        if (canvas.getWidth() != w || canvas.getHeight() != h) {
-            canvas.setWidth(w);
-            canvas.setHeight(h);
-        }
-
+        // 不再需要调整Canvas大小
         renderer.render(canvas, currentSpm, currentPageIndex, loadedImages, showCoords, showHitboxes);
     }
 
     public void previewImage(int imageIndex, String imageName) {
         this.currentPageIndex = -1;
+        GraphicsContext g = canvas.getGraphicsContext2D();
+
+        // 绘制背景
+        g.setFill(Color.rgb(30, 30, 30));
+        g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawCheckerBackground(g, canvas.getWidth(), canvas.getHeight());
+
         if (imageIndex < 0 || imageIndex >= loadedImages.size()) return;
 
         Image img = loadedImages.get(imageIndex);
         if (img == null) {
-            canvas.setWidth(256);
-            canvas.setHeight(256);
-            GraphicsContext g = canvas.getGraphicsContext2D();
-            drawCheckerBackground(g, 256, 256);
             g.setFill(Color.RED);
             g.fillText("Image not loaded: " + imageName, 20, 20);
             return;
         }
 
-        canvas.setWidth(img.getWidth());
-        canvas.setHeight(img.getHeight());
-        GraphicsContext g = canvas.getGraphicsContext2D();
-        drawCheckerBackground(g, img.getWidth(), img.getHeight());
-        g.drawImage(img, 0, 0);
+        // 将图片绘制在画布中心
+        double x = (canvas.getWidth() - img.getWidth()) / 2.0;
+        double y = (canvas.getHeight() - img.getHeight()) / 2.0;
+        g.drawImage(img, x, y);
     }
 
     public void clearCanvas() {
-        canvas.setWidth(1024);
-        canvas.setHeight(768);
         GraphicsContext g = canvas.getGraphicsContext2D();
         g.setFill(Color.rgb(30, 30, 30));
         g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());

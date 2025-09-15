@@ -5,6 +5,7 @@ import com.karaik.spmviewer.model.SpmEntry;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -395,6 +396,9 @@ public class MainViewController {
                 uiStateController.updateTablesForPage(null);
                 canvasController.clearCanvas();
             }
+            // 确保UI更新后将ScrollPane滚动到中心
+            Platform.runLater(this::centerScrollPane);
+
             statusLabel.setText("Ready");
             progressBar.setVisible(false);
             currentlyLoadingSpm = null;
@@ -432,6 +436,7 @@ public class MainViewController {
         pageTree.getSelectionModel().clearSelection();
         uiStateController.updateTablesForPage(null);
         canvasController.previewImage(index, imageName);
+        Platform.runLater(this::centerScrollPane);
     }
 
     private void renderCurrentPage() {
@@ -439,6 +444,14 @@ public class MainViewController {
                 showCoordsCheck.isSelected(),
                 showHitboxCheck.isSelected()
         );
+    }
+
+    /**
+     * 将ScrollPane的滚动条设置到中心位置 (0.5, 0.5)。
+     */
+    private void centerScrollPane() {
+        scrollPane.setHvalue(0.5);
+        scrollPane.setVvalue(0.5);
     }
 
     @FXML private void onOpenDirectory() {

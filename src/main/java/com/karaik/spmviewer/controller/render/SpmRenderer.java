@@ -30,21 +30,23 @@ public class SpmRenderer {
                        boolean showHitboxes) {
 
         GraphicsContext g = canvas.getGraphicsContext2D();
+
+        // 1. 清理并绘制背景
         g.setFill(Color.rgb(30, 30, 30));
         g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawChecker(g, (int)canvas.getWidth(), (int)canvas.getHeight());
 
         Spm.SPMPageData page = spm.getPageData().get(pageIndex);
 
-        // 计算页面的偏移量，使得页面的(0,0)点能够正确地映射到画布上
-        int offX = 0;
-        int offY = 0;
-        if (page.getPageRect() != null) {
-            offX = -safe(page.getPageRect().getLeft());
-            offY = -safe(page.getPageRect().getTop());
-        }
+        // 2. 定义世界原点 (画布中心)
+        double worldOriginX = canvas.getWidth() / 2.0;
+        double worldOriginY = canvas.getHeight() / 2.0;
 
-        drawChecker(g, safe(page.getPageWidth()), safe(page.getPageHeight()));
+        // 3. 计算将页面逻辑原点对齐到世界原点所需的平移量
+        double translateX = worldOriginX - safe(page.getRotateCenterX());
+        double translateY = worldOriginY - safe(page.getRotateCenterY());
 
+        // 4. 绘制所有Chip，应用平移
         var chips = Optional.ofNullable(page.getChipData()).orElse(List.of());
         for (Spm.SPMChipData c : chips) {
             Image img = getImageByNo(images, c.getImageNo());
@@ -53,24 +55,21 @@ public class SpmRenderer {
             Rect dst = Rect.from(c.getDstRect());
             Rect src = Rect.from(c.getSrcRect());
 
-            g.drawImage(img, src.x, src.y, src.w, src.h, offX + dst.x, offY + dst.y, dst.w, dst.h);
+            g.drawImage(img, src.x, src.y, src.w, src.h,
+                    translateX + dst.x, translateY + dst.y, dst.w, dst.h);
         }
 
-        // 计算页面的物理中心点（原点）在画布上的位置
-        double originX = offX + safe(page.getRotateCenterX());
-        double originY = offY + safe(page.getRotateCenterY());
-
-        // 如果用户要求，绘制坐标系
+        // 5. 绘制坐标系，它始终在世界原点
         if (showCoords) {
-            drawCoordinateSystem(g, originX, originY);
+            drawCoordinateSystem(g, worldOriginX, worldOriginY);
         }
 
-        // 如果用户要求，绘制Hitboxes
+        // 6. 绘制Hitboxes，它们的坐标也需要基于世界原点进行平移
         if (showHitboxes) {
             var hitboxes = Optional.ofNullable(page.getHitRects()).orElse(List.of());
             for (Spm.SPMHitArea hitbox : hitboxes) {
-                // 利用多态，让每个hitbox自己绘制自己
-                hitbox.drawSelf(g, originX, originY);
+                // 传递世界原点作为绘制基准
+                hitbox.drawSelf(g, worldOriginX, worldOriginY);
             }
         }
     }
@@ -83,9 +82,9 @@ public class SpmRenderer {
         g.setLineWidth(1.0);
 
         // 绘制X轴
-        g.strokeLine(originX - 1000, originY, originX + 1000, originY);
+        g.strokeLine(0, originY, g.getCanvas().getWidth(), originY);
         // 绘制Y轴
-        g.strokeLine(originX, originY - 1000, originX, originY + 1000);
+        g.strokeLine(originX, 0, originX, g.getCanvas().getHeight());
 
         // 绘制一个小圆点标记原点
         g.setFill(Color.YELLOW);

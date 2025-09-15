@@ -16,9 +16,9 @@ public class Settings {
      */
     public enum ParsingMode {
         // 方言A (多态版): SPM VER-2.00 (for bhe)
-        VER_2_00_BHE("SPM VER-2.00 (for bhe)"),
+        VER_2_00_BHE("SPM VER-2.00 (bhe)"),
         // 方言C (旧版变种): SPM VER-2.00 (for bsdx)
-        VER_2_00_BSDX("SPM VER-2.00 (for bsdx)"),
+        VER_2_00_BSDX("SPM VER-2.00 (bsdx)"),
         // 方言B (旧版标准): SPM VER-2.02
         VER_2_02("SPM VER-2.02");
 

@@ -46,8 +46,13 @@ public class CharsetDialog extends Dialog<String> {
                     Charset.forName(selectedCharset);
                     return selectedCharset;
                 } catch (Exception e) {
-                    new Alert(Alert.AlertType.ERROR, "Invalid Charset" + "The charset '" + selectedCharset + "' is not supported.", ButtonType.NO).showAndWait();
-                    return null; // Stay in dialog
+                    Alert errorAlert = new Alert(Alert.AlertType.ERROR);
+                    errorAlert.initOwner(this.getDialogPane().getScene().getWindow());
+                    errorAlert.setTitle("Invalid Charset");
+                    errorAlert.setHeaderText(null);
+                    errorAlert.setContentText("The charset '" + selectedCharset + "' is not supported.");
+                    errorAlert.showAndWait();
+                    return null;
                 }
             }
             return null;
