@@ -1,13 +1,12 @@
 package com.karaik.spmviewer.controller;
 
-import com.karaik.spmviewer.model.SpmEntry;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.control.*;
-
 import java.util.List;
 import java.util.Optional;
 
 public class UiStateController {
+    // ... 字段和构造函数不变 ...
 
     private final TreeView<String> pageTree;
     private final TreeView<String> animTree;
@@ -15,6 +14,7 @@ public class UiStateController {
     private final ComboBox<String> animSelector;
     private final Label lblVersion, lblPages, lblImages, lblAnims;
     private final TableView<Spm.SPMChipData> chipTable;
+    // 表格的泛型改为 SPMHitArea 基类
     private final TableView<Spm.SPMHitArea> hitTable;
 
     public UiStateController(TreeView<String> pageTree, TreeView<String> animTree, ListView<String> imageList,

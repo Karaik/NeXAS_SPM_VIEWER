@@ -1,0 +1,26 @@
+package com.karaik.spmviewer.spm.hitarea;
+
+import com.karaik.spmviewer.io.BinaryReader;
+import com.karaik.spmviewer.spm.Spm;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class C2DDot extends Spm.SPMHitArea {
+    private Integer x;
+    private Integer y;
+    private byte[] skippedBytes;
+
+    @Override
+    public void readInfo(BinaryReader reader) throws Exception {
+        x = reader.readInt();
+        y = reader.readInt();
+        skippedBytes = reader.readBytes(16);
+    }
+
+    @Override
+    public String getDisplayInfo() {
+        return String.format("2DDot (x: %d, y: %d)", x, y);
+    }
+}
