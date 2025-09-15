@@ -6,12 +6,14 @@ import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
-import java.io.IOException;
 import java.net.URL;
+import java.util.Locale;
 
 public class MainApplication extends Application {
     @Override
     public void start(Stage stage) throws Exception {
+
+        Locale.setDefault(Locale.ENGLISH);
 
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/MainView.fxml"));
         Scene scene = new Scene(loader.load(), 920, 720);

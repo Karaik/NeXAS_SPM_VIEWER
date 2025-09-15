@@ -1,6 +1,7 @@
 package com.karaik.spmviewer.controller;
 
 import com.karaik.spmviewer.controller.render.SpmRenderer;
+import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.Group;
 import javafx.scene.canvas.Canvas;
@@ -8,6 +9,7 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
+import lombok.Data;
 
 import java.io.FileInputStream;
 import java.nio.file.Files;
@@ -15,9 +17,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+@Data
 public class CanvasController {
 
-    private static final double FIXED_CANVAS_SIZE = 4096; // 一个足够大的固定尺寸
+    private static final double FIXED_CANVAS_SIZE = 4096;
 
     private final Canvas canvas;
     private final SpmRenderer renderer = new SpmRenderer();
@@ -34,42 +37,26 @@ public class CanvasController {
         canvasGroup.getChildren().add(canvas);
     }
 
-    public Canvas getCanvas() {
-        return canvas;
-    }
-
     public void setCurrentSpm(Spm spm, Path imageDirectory) {
         this.currentSpm = spm;
         this.currentPageIndex = -1;
         loadImages(imageDirectory);
     }
 
-    public void setCurrentPageIndex(int index) {
-        this.currentPageIndex = index;
-    }
-
-    /**
-     * 渲染当前选定的页面，并根据传入的选项决定是否绘制额外信息。
-     * @param showCoords  是否显示坐标系
-     * @param showHitboxes 是否显示Hitbox
-     */
-    public void renderPage(boolean showCoords, boolean showHitboxes) {
+    public void renderPage(boolean showCoords, boolean showHitboxes, Settings.BackgroundMode bgMode, Color bgColor) {
         if (currentSpm == null || currentPageIndex < 0 || currentSpm.getPageData() == null || currentPageIndex >= currentSpm.getPageData().size()) {
-            clearCanvas();
+            clearCanvas(bgMode, bgColor);
             return;
         }
-        // 不再需要调整Canvas大小
-        renderer.render(canvas, currentSpm, currentPageIndex, loadedImages, showCoords, showHitboxes);
+        renderer.render(canvas, currentSpm, currentPageIndex, loadedImages, showCoords, showHitboxes, bgMode, bgColor);
     }
 
-    public void previewImage(int imageIndex, String imageName) {
+    public void previewImage(int imageIndex, String imageName, Settings.BackgroundMode bgMode, Color bgColor) {
         this.currentPageIndex = -1;
         GraphicsContext g = canvas.getGraphicsContext2D();
 
         // 绘制背景
-        g.setFill(Color.rgb(30, 30, 30));
-        g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
-        drawCheckerBackground(g, canvas.getWidth(), canvas.getHeight());
+        renderer.drawBackground(g, canvas.getWidth(), canvas.getHeight(), bgMode, bgColor);
 
         if (imageIndex < 0 || imageIndex >= loadedImages.size()) return;
 
@@ -86,11 +73,9 @@ public class CanvasController {
         g.drawImage(img, x, y);
     }
 
-    public void clearCanvas() {
+    public void clearCanvas(Settings.BackgroundMode bgMode, Color bgColor) {
         GraphicsContext g = canvas.getGraphicsContext2D();
-        g.setFill(Color.rgb(30, 30, 30));
-        g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
-        drawCheckerBackground(g, canvas.getWidth(), canvas.getHeight());
+        renderer.drawBackground(g, canvas.getWidth(), canvas.getHeight(), bgMode, bgColor);
     }
 
     private void loadImages(Path dir) {
@@ -109,17 +94,6 @@ public class CanvasController {
                 }
             }
             loadedImages.add(loadedImage);
-        }
-    }
-
-    private void drawCheckerBackground(GraphicsContext g, double w, double h) {
-        int s = 16;
-        for (int y = 0; y < h; y += s) {
-            for (int x = 0; x < w; x += s) {
-                boolean odd = ((x / s) + (y / s)) % 2 == 1;
-                g.setFill(odd ? Color.gray(0.85) : Color.gray(0.92));
-                g.fillRect(x, y, s, s);
-            }
         }
     }
 }

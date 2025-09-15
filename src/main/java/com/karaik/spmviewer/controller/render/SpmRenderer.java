@@ -1,5 +1,6 @@
 package com.karaik.spmviewer.controller.render;
 
+import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -14,27 +15,38 @@ import java.util.Optional;
 public class SpmRenderer {
 
     /**
-     * 渲染一个SPM页面到Canvas上。
-     * @param canvas       目标画布
-     * @param spm          当前SPM数据对象
-     * @param pageIndex    要渲染的页面索引
-     * @param images       已加载的图片列表
-     * @param showCoords   是否显示坐标系
-     * @param showHitboxes 是否显示Hitbox
+     * 根据设置绘制画布背景。
+     * @param g         绘图上下文
+     * @param w         画布宽度
+     * @param h         画布高度
+     * @param bgMode    背景模式 (网格/纯色)
+     * @param bgColor   纯色模式下的背景颜色
      */
+    public void drawBackground(GraphicsContext g, double w, double h, Settings.BackgroundMode bgMode, Color bgColor) {
+        switch (bgMode) {
+            case CHECKERBOARD:
+                drawChecker(g, (int)w, (int)h);
+                break;
+            case SOLID_COLOR:
+                g.setFill(bgColor);
+                g.fillRect(0, 0, w, h);
+                break;
+        }
+    }
+
     public void render(Canvas canvas,
                        Spm spm,
                        int pageIndex,
                        List<Image> images,
                        boolean showCoords,
-                       boolean showHitboxes) {
+                       boolean showHitboxes,
+                       Settings.BackgroundMode bgMode,
+                       Color bgColor) {
 
         GraphicsContext g = canvas.getGraphicsContext2D();
 
         // 1. 清理并绘制背景
-        g.setFill(Color.rgb(30, 30, 30));
-        g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
-        drawChecker(g, (int)canvas.getWidth(), (int)canvas.getHeight());
+        drawBackground(g, canvas.getWidth(), canvas.getHeight(), bgMode, bgColor);
 
         Spm.SPMPageData page = spm.getPageData().get(pageIndex);
 

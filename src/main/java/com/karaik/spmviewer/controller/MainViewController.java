@@ -43,6 +43,8 @@ public class MainViewController {
     @FXML private ComboBox<Settings.ParsingMode> parsingModeSelector;
     @FXML private CheckBox showCoordsCheck;
     @FXML private CheckBox showHitboxCheck;
+    @FXML private ComboBox<Settings.BackgroundMode> backgroundModeSelector;
+    @FXML private ColorPicker backgroundColorPicker;
     @FXML private TextField searchField;
     @FXML private Slider zoomSlider;
     @FXML private TextField zoomField;
@@ -105,6 +107,7 @@ public class MainViewController {
     private void setupUIComponents() {
         setupParsingModeSelector();
         setupDisplayOptionListeners();
+        setupBackgroundControls();
         setupSpmListCellFactory();
         setupActionListeners();
         setupCanvasInteractions();
@@ -112,12 +115,9 @@ public class MainViewController {
         setupFiltering();
         setupExpandAllContextMenus();
         uiStateController.clearAllPanels();
-        canvasController.clearCanvas();
+        canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
     }
 
-    /**
-     * 初始化用于选择SPM解析方言的下拉框。
-     */
     private void setupParsingModeSelector() {
         parsingModeSelector.getItems().setAll(Settings.ParsingMode.values());
         parsingModeSelector.setValue(Settings.getParsingMode());
@@ -129,13 +129,35 @@ public class MainViewController {
         });
     }
 
-    /**
-     * 为“显示坐标系”和“显示Hitbox”复选框添加监听器。
-     * 当它们的状态改变时，触发画布的重绘。
-     */
     private void setupDisplayOptionListeners() {
         showCoordsCheck.selectedProperty().addListener((obs, oldVal, newVal) -> renderCurrentPage());
         showHitboxCheck.selectedProperty().addListener((obs, oldVal, newVal) -> renderCurrentPage());
+    }
+
+    private void setupBackgroundControls() {
+        backgroundModeSelector.getItems().setAll(Settings.BackgroundMode.values());
+        backgroundModeSelector.setValue(Settings.getBackgroundMode());
+        backgroundColorPicker.setValue(Settings.getBackgroundColor());
+
+        backgroundColorPicker.visibleProperty().bind(
+                backgroundModeSelector.valueProperty().isEqualTo(Settings.BackgroundMode.SOLID_COLOR)
+        );
+
+        backgroundModeSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                Settings.setBackgroundMode(newVal);
+                renderCurrentPage();
+            }
+        });
+
+        backgroundColorPicker.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                Settings.setBackgroundColor(newVal);
+                if (Settings.getBackgroundMode() == Settings.BackgroundMode.SOLID_COLOR) {
+                    renderCurrentPage();
+                }
+            }
+        });
     }
 
     private void setupSpmListCellFactory() {
@@ -144,18 +166,13 @@ public class MainViewController {
             protected void updateItem(SpmEntry item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
-                    setText(null);
-                    setDisable(false);
+                    setText(null); setDisable(false);
                 } else {
                     setText(item.toString());
                     if (item.getStatus() == SpmEntry.Status.FAILED) {
-                        setTextFill(Color.RED);
-                        setTooltip(new Tooltip(item.getErrorMessage()));
-                        setDisable(true);
+                        setTextFill(Color.RED); setTooltip(new Tooltip(item.getErrorMessage())); setDisable(true);
                     } else {
-                        setTextFill(Color.BLACK);
-                        setTooltip(null);
-                        setDisable(false);
+                        setTextFill(Color.BLACK); setTooltip(null); setDisable(false);
                     }
                 }
             }
@@ -165,9 +182,7 @@ public class MainViewController {
     private void setupActionListeners() {
         spmListView.setOnMouseClicked(event -> handleSpmSelection());
         spmListView.setOnKeyReleased(event -> {
-            if (event.getCode() == KeyCode.UP || event.getCode() == KeyCode.DOWN) {
-                handleSpmSelection();
-            }
+            if (event.getCode() == KeyCode.UP || event.getCode() == KeyCode.DOWN) handleSpmSelection();
         });
 
         masterSpmList.addListener((ListChangeListener<SpmEntry>) c -> {
@@ -182,8 +197,7 @@ public class MainViewController {
         pageTree.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, item) -> {
             if (item != null && item.isLeaf()) {
                 try {
-                    String pageIndexStr = item.getValue().split(" ")[0];
-                    selectPage(Integer.parseInt(pageIndexStr));
+                    selectPage(Integer.parseInt(item.getValue().split(" ")[0]));
                 } catch (NumberFormatException ignored) {}
             }
         });
@@ -194,10 +208,8 @@ public class MainViewController {
                     String value = item.getValue();
                     String pageStr = value.substring(value.indexOf('[') + 1, value.indexOf(']'));
                     if (!pageStr.isEmpty()) {
-                        int pageToSelect = Integer.parseInt(pageStr.split(",")[0].trim());
-                        selectPage(pageToSelect);
-                        String animDisplayName = item.getParent().getValue();
-                        animSelector.getSelectionModel().select(animDisplayName);
+                        selectPage(Integer.parseInt(pageStr.split(",")[0].trim()));
+                        animSelector.getSelectionModel().select(item.getParent().getValue());
                     }
                 } catch (Exception ignored) {}
             }
@@ -206,26 +218,14 @@ public class MainViewController {
         imageList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, item) -> {
             if (item != null) {
                 try {
-                    String imageIndexStr = item.split(":")[0].trim();
-                    previewImage(Integer.parseInt(imageIndexStr), item);
+                    previewImage(Integer.parseInt(item.split(":")[0].trim()), item);
                 } catch (NumberFormatException ignored) {}
             }
         });
 
-        animSelector.setOnAction(e -> {
-            if (animSelector.getValue() != null) onPlay();
-        });
-
-        alwaysOnTopCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
-            Stage stage = (Stage) canvasHolder.getScene().getWindow();
-            stage.setAlwaysOnTop(newVal);
-        });
-
-        canvasHolder.sceneProperty().addListener((obs, oldScene, newScene) -> {
-            if (newScene != null) {
-                setupKeyboardShortcuts(newScene);
-            }
-        });
+        animSelector.setOnAction(e -> { if (animSelector.getValue() != null) onPlay(); });
+        alwaysOnTopCheck.selectedProperty().addListener((obs, oldVal, newVal) -> ((Stage) canvasHolder.getScene().getWindow()).setAlwaysOnTop(newVal));
+        canvasHolder.sceneProperty().addListener((obs, oldScene, newScene) -> { if (newScene != null) setupKeyboardShortcuts(newScene); });
     }
 
     private void setupCanvasInteractions() {
@@ -250,8 +250,7 @@ public class MainViewController {
 
         scrollPane.addEventFilter(ScrollEvent.SCROLL, event -> {
             if (event.isControlDown()) {
-                double zoomFactor = event.getDeltaY() > 0 ? 1.1 : 1.0 / 1.1;
-                zoomSlider.setValue(zoomSlider.getValue() * zoomFactor);
+                zoomSlider.setValue(zoomSlider.getValue() * (event.getDeltaY() > 0 ? 1.1 : 1.0 / 1.1));
                 event.consume();
             }
         });
@@ -345,8 +344,7 @@ public class MainViewController {
     }
 
     private void handleSpmSelection() {
-        SpmEntry selectedEntry = spmListView.getSelectionModel().getSelectedItem();
-        loadAndDisplaySpm(selectedEntry);
+        loadAndDisplaySpm(spmListView.getSelectionModel().getSelectedItem());
     }
 
     private void loadAndDisplaySpm(SpmEntry entry) {
@@ -358,7 +356,7 @@ public class MainViewController {
         if (entry == null || entry.getStatus() != SpmEntry.Status.SUCCESS) {
             currentlyLoadingSpm = null;
             uiStateController.clearAllPanels();
-            canvasController.clearCanvas();
+            canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
             statusLabel.setText("Ready");
             progressBar.setVisible(false);
             return;
@@ -373,28 +371,25 @@ public class MainViewController {
         progressBar.setVisible(true);
         animSearchField.clear();
         uiStateController.clearAllPanels();
-        canvasController.clearCanvas();
+        canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
 
         // 后台任务：只做耗时的IO/解析，避免访问FX线程对象
         Task<Void> loadTask = new Task<>() {
-            @Override
-            protected Void call() {
+            @Override protected Void call() {
                 canvasController.setCurrentSpm(entry.getSpm(), spmFileHandler.getCurrentDirectory());
                 return null;
             }
         };
 
         loadTask.setOnSucceeded(e -> {
-            // 如果在此期间用户又点了别的文件，这次结果作废
+            // 如果在此期间又点了别的文件，这次结果作废
             if (myGen != loadGen) return;
 
             uiStateController.updateUiForSpm(entry.getSpm(), null);
-            int pageCount = Optional.ofNullable(entry.getSpm().getNumPageData()).orElse(0);
-            if (pageCount > 0) {
-                selectPage(0);
-            } else {
+            if (Optional.ofNullable(entry.getSpm().getNumPageData()).orElse(0) > 0) selectPage(0);
+            else {
                 uiStateController.updateTablesForPage(null);
-                canvasController.clearCanvas();
+                canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
             }
             // 确保UI更新后将ScrollPane滚动到中心
             Platform.runLater(this::centerScrollPane);
@@ -406,9 +401,7 @@ public class MainViewController {
 
         loadTask.setOnFailed(e -> {
             if (myGen != loadGen) return;
-
-            Throwable ex = loadTask.getException();
-            log.error("Failed to load {}", entry.getPath().getFileName(), ex);
+            log.error("Failed to load {}", entry.getPath().getFileName(), loadTask.getException());
             statusLabel.setText("Failed to load " + entry.getPath().getFileName());
             progressBar.setVisible(false);
             currentlyLoadingSpm = null;
@@ -435,14 +428,16 @@ public class MainViewController {
         onStop();
         pageTree.getSelectionModel().clearSelection();
         uiStateController.updateTablesForPage(null);
-        canvasController.previewImage(index, imageName);
+        canvasController.previewImage(index, imageName, Settings.getBackgroundMode(), Settings.getBackgroundColor());
         Platform.runLater(this::centerScrollPane);
     }
 
     private void renderCurrentPage() {
         canvasController.renderPage(
                 showCoordsCheck.isSelected(),
-                showHitboxCheck.isSelected()
+                showHitboxCheck.isSelected(),
+                Settings.getBackgroundMode(),
+                Settings.getBackgroundColor()
         );
     }
 
@@ -486,11 +481,9 @@ public class MainViewController {
         alert.initOwner(canvasHolder.getScene().getWindow());
         alert.setTitle("Shortcuts");
         alert.setHeaderText("Keyboard and Mouse Shortcuts");
-        String content =
-                "Play/Pause Media Key: Toggle animation playback\n\n" +
-                        "Ctrl + Mouse Scroll: Zoom in/out on the canvas\n\n" +
-                        "Middle Mouse Button Drag: Pan the canvas";
-        alert.setContentText(content);
+        alert.setContentText("Play/Pause Media Key: Toggle animation playback\n\n" +
+                "Ctrl + Mouse Scroll: Zoom in/out on the canvas\n\n" +
+                "Middle Mouse Button Drag: Pan the canvas");
         alert.showAndWait();
     }
 
@@ -515,14 +508,8 @@ public class MainViewController {
         if (displayName == null) return;
         onStop();
         try {
-            int startIndex = displayName.indexOf('[') + 1;
-            int endIndex = displayName.indexOf(']');
-            if (startIndex == 0 || endIndex == -1) return;
-            int animIndex = Integer.parseInt(displayName.substring(startIndex, endIndex));
-            List<Spm.SPMAnimData> animDataList = selectedSpmEntry.getSpm().getAnimData();
-            if (animIndex < 0 || animIndex >= animDataList.size()) return;
-            Spm.SPMAnimData anim = animDataList.get(animIndex);
-
+            int animIndex = Integer.parseInt(displayName.substring(displayName.indexOf('[') + 1, displayName.indexOf(']')));
+            Spm.SPMAnimData anim = selectedSpmEntry.getSpm().getAnimData().get(animIndex);
             List<KeyFrame> keyFrames = new ArrayList<>();
             int totalDuration = 0;
             int frameMillis = (int) (1000.0 / fpsSlider.getValue());
@@ -537,8 +524,8 @@ public class MainViewController {
             animTimeline = new Timeline(keyFrames.toArray(new KeyFrame[0]));
             animTimeline.setCycleCount(Timeline.INDEFINITE);
             animTimeline.play();
-        } catch (NumberFormatException e) {
-            System.err.println("Failed to parse animation index: " + displayName);
+        } catch (Exception e) {
+            log.error("Failed to parse/play animation: " + displayName);
         }
     }
 

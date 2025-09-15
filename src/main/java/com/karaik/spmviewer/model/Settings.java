@@ -1,5 +1,7 @@
 package com.karaik.spmviewer.model;
 
+import javafx.scene.paint.Color;
+
 import java.nio.charset.Charset;
 import java.util.prefs.Preferences;
 
@@ -8,6 +10,8 @@ public class Settings {
     private static final String CHARSET_KEY = "charset";
     private static final String LAST_DIRECTORY_KEY = "lastDirectory";
     private static final String PARSING_MODE_KEY = "parsingMode";
+    private static final String BG_MODE_KEY = "backgroundMode";
+    private static final String BG_COLOR_KEY = "backgroundColor";
     private static final String DEFAULT_CHARSET = "windows-31j";
 
     /**
@@ -23,19 +27,19 @@ public class Settings {
         VER_2_02("SPM VER-2.02");
 
         private final String displayName;
+        ParsingMode(String displayName) { this.displayName = displayName; }
+        @Override public String toString() { return displayName; }
+    }
 
-        ParsingMode(String displayName) {
-            this.displayName = displayName;
-        }
-
-        @Override
-        public String toString() {
-            return displayName;
-        }
+    public enum BackgroundMode {
+        CHECKERBOARD,
+        SOLID_COLOR
     }
 
     private static String currentCharsetName = DEFAULT_CHARSET;
     private static ParsingMode currentParsingMode = ParsingMode.VER_2_00_BHE;
+    private static BackgroundMode currentBackgroundMode = BackgroundMode.CHECKERBOARD;
+    private static Color currentBackgroundColor = Color.rgb(30, 30, 30);
 
     static {
         Preferences prefs = Preferences.userNodeForPackage(Settings.class);
@@ -47,54 +51,69 @@ public class Settings {
         } catch (IllegalArgumentException e) {
             currentParsingMode = ParsingMode.VER_2_00_BHE;
         }
-    }
 
-    public static String getCharsetName() {
-        return currentCharsetName;
-    }
-
-    public static Charset getCharset() {
+        // Background settings
+        String bgModeName = prefs.get(BG_MODE_KEY, BackgroundMode.CHECKERBOARD.name());
         try {
-            return Charset.forName(currentCharsetName);
+            currentBackgroundMode = BackgroundMode.valueOf(bgModeName);
+        } catch (IllegalArgumentException e) {
+            currentBackgroundMode = BackgroundMode.CHECKERBOARD;
+        }
+
+        String colorString = prefs.get(BG_COLOR_KEY, Color.rgb(30, 30, 30).toString());
+        try {
+            currentBackgroundColor = Color.web(colorString);
         } catch (Exception e) {
-            return Charset.forName(DEFAULT_CHARSET);
+            currentBackgroundColor = Color.rgb(30, 30, 30);
         }
     }
 
+    public static String getCharsetName() { return currentCharsetName; }
+    public static Charset getCharset() {
+        try { return Charset.forName(currentCharsetName); }
+        catch (Exception e) { return Charset.forName(DEFAULT_CHARSET); }
+    }
     public static void setCharsetName(String charsetName) {
         if (charsetName != null && !charsetName.isEmpty()) {
             try {
                 Charset.forName(charsetName);
                 currentCharsetName = charsetName;
-                Preferences prefs = Preferences.userNodeForPackage(Settings.class);
-                prefs.put(CHARSET_KEY, currentCharsetName);
-            } catch (Exception e) {
-                System.err.println("Invalid charset name provided: " + charsetName);
-            }
+                Preferences.userNodeForPackage(Settings.class).put(CHARSET_KEY, currentCharsetName);
+            } catch (Exception e) { System.err.println("Invalid charset name provided: " + charsetName); }
         }
     }
 
     public static String getLastDirectory() {
-        Preferences prefs = Preferences.userNodeForPackage(Settings.class);
-        return prefs.get(LAST_DIRECTORY_KEY, null);
+        return Preferences.userNodeForPackage(Settings.class).get(LAST_DIRECTORY_KEY, null);
     }
 
     public static void setLastDirectory(String path) {
         if (path != null && !path.isEmpty()) {
-            Preferences prefs = Preferences.userNodeForPackage(Settings.class);
-            prefs.put(LAST_DIRECTORY_KEY, path);
+            Preferences.userNodeForPackage(Settings.class).put(LAST_DIRECTORY_KEY, path);
         }
     }
 
-    public static ParsingMode getParsingMode() {
-        return currentParsingMode;
-    }
-
+    public static ParsingMode getParsingMode() { return currentParsingMode; }
     public static void setParsingMode(ParsingMode mode) {
         if (mode != null) {
             currentParsingMode = mode;
-            Preferences prefs = Preferences.userNodeForPackage(Settings.class);
-            prefs.put(PARSING_MODE_KEY, currentParsingMode.name());
+            Preferences.userNodeForPackage(Settings.class).put(PARSING_MODE_KEY, currentParsingMode.name());
+        }
+    }
+
+    public static BackgroundMode getBackgroundMode() { return currentBackgroundMode; }
+    public static void setBackgroundMode(BackgroundMode mode) {
+        if (mode != null) {
+            currentBackgroundMode = mode;
+            Preferences.userNodeForPackage(Settings.class).put(BG_MODE_KEY, currentBackgroundMode.name());
+        }
+    }
+
+    public static Color getBackgroundColor() { return currentBackgroundColor; }
+    public static void setBackgroundColor(Color color) {
+        if (color != null) {
+            currentBackgroundColor = color;
+            Preferences.userNodeForPackage(Settings.class).put(BG_COLOR_KEY, color.toString());
         }
     }
 }
