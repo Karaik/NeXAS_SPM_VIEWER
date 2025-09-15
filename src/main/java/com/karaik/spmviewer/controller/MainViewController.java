@@ -5,20 +5,17 @@ import com.karaik.spmviewer.model.SpmEntry;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
-import javafx.collections.FXCollections; // ADDED
-import javafx.collections.ListChangeListener; // ADDED
-import javafx.collections.ObservableList; // ADDED
-import javafx.collections.transformation.FilteredList; // ADDED
+import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
+import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.Group;
 import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.*;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
-import javafx.scene.input.MouseButton;
-import javafx.scene.input.MouseEvent;
-import javafx.scene.input.ScrollEvent;
+import javafx.scene.input.*;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
@@ -40,7 +37,7 @@ import java.util.Optional;
 public class MainViewController {
 
     // --- FXML Binds ---
-    @FXML private TextField searchField; // ADDED for search functionality
+    @FXML private TextField searchField;
     @FXML private Slider zoomSlider;
     @FXML private TextField zoomField;
     @FXML private ComboBox<String> animSelector;
@@ -58,8 +55,10 @@ public class MainViewController {
     @FXML private Label lblVersion, lblPages, lblImages, lblAnims;
     @FXML private Label statusLabel;
     @FXML private ProgressBar progressBar;
+    // MODIFIED: Added FXML fields for animation search
+    @FXML private TitledPane animTitledPane;
+    @FXML private TextField animSearchField;
 
-    // --- Controllers and Services ---
     private SpmFileHandler spmFileHandler;
     private UiStateController uiStateController;
     private CanvasController canvasController;
@@ -67,8 +66,8 @@ public class MainViewController {
     private Timeline animTimeline;
     private double dragStartX, dragStartY, hValStart, vValStart;
 
-    // ADDED: Master list to hold all items for filtering
     private ObservableList<SpmEntry> masterSpmList;
+    private SpmEntry currentlyLoadingSpm = null;
 
     @FXML
     public void initialize() {
@@ -83,7 +82,6 @@ public class MainViewController {
         });
 
         // --- Initialize Controllers ---
-        // MODIFIED: Setup for filtering
         masterSpmList = FXCollections.observableArrayList();
         spmFileHandler = new SpmFileHandler(masterSpmList, progressBar, statusLabel);
 
@@ -95,8 +93,10 @@ public class MainViewController {
         setupBindingsAndListeners();
         setupInteractions();
         setupValueBindings();
-        setupFiltering(); // ADDED
-        setupExpandAllContextMenus(); // ADDED
+        setupFiltering();
+        setupExpandAllContextMenus();
+        // MODIFIED: Setup animation filtering listener
+        setupAnimFiltering();
 
         // Initial state
         uiStateController.clearAllPanels();
@@ -133,25 +133,25 @@ public class MainViewController {
     }
 
     private void setupBindingsAndListeners() {
-        // SPM List selection
-        spmListView.getSelectionModel().selectedItemProperty().addListener((obs, old, entry) -> {
-            if (entry != null && entry.getStatus() == SpmEntry.Status.SUCCESS) {
-                selectSpm(entry);
+        spmListView.setOnMouseClicked(event -> {
+            loadAndDisplaySpm(spmListView.getSelectionModel().getSelectedItem());
+        });
+
+        spmListView.setOnKeyReleased(event -> {
+            if (event.getCode() == KeyCode.UP || event.getCode() == KeyCode.DOWN) {
+                loadAndDisplaySpm(spmListView.getSelectionModel().getSelectedItem());
             }
         });
 
-        // ADDED: Auto-select first item when list is populated/re-filtered
         masterSpmList.addListener((ListChangeListener<SpmEntry>) c -> {
             if (!masterSpmList.isEmpty() && spmListView.getSelectionModel().getSelectedItem() == null) {
-                // Check if the currently filtered list is not empty before selecting
                 if (!spmListView.getItems().isEmpty()) {
                     spmListView.getSelectionModel().selectFirst();
+                    loadAndDisplaySpm(spmListView.getSelectionModel().getSelectedItem());
                 }
             }
         });
 
-
-        // Page/Anim/Image selection
         pageTree.getSelectionModel().selectedItemProperty().addListener((o, ov, item) -> {
             if (item != null && item.isLeaf()) {
                 try {
@@ -169,8 +169,8 @@ public class MainViewController {
                         if (!pageStr.isEmpty()) {
                             int pageToSelect = Integer.parseInt(pageStr.split(",")[0].trim());
                             selectPage(pageToSelect);
-                            String animName = item.getParent().getValue();
-                            animSelector.getSelectionModel().select(animName);
+                            String animDisplayName = item.getParent().getValue();
+                            animSelector.getSelectionModel().select(animDisplayName);
                         }
                     }
                 } catch (Exception ignored) {}
@@ -257,14 +257,30 @@ public class MainViewController {
                 String lowerCaseFilter = newValue.toLowerCase();
                 return spmEntry.getPath().getFileName().toString().toLowerCase().contains(lowerCaseFilter);
             });
-            // After filtering, if nothing is selected but list is not empty, select first item
             if (spmListView.getSelectionModel().getSelectedItem() == null && !spmListView.getItems().isEmpty()) {
                 spmListView.getSelectionModel().selectFirst();
+                loadAndDisplaySpm(spmListView.getSelectionModel().getSelectedItem());
             }
         });
 
         spmListView.setItems(filteredList);
     }
+
+    // MODIFIED: New method to handle animation search
+    private void setupAnimFiltering() {
+        animSearchField.textProperty().addListener((obs, ov, nv) -> {
+            SpmEntry selectedSpm = spmListView.getSelectionModel().getSelectedItem();
+            if (selectedSpm != null && selectedSpm.getSpm() != null) {
+                // Re-populate the animation UI elements with the new filter
+                uiStateController.updateUiForSpm(selectedSpm.getSpm(), nv);
+                // Auto-expand the pane for better user experience when searching
+                if (nv != null && !nv.trim().isEmpty()) {
+                    animTitledPane.setExpanded(true);
+                }
+            }
+        });
+    }
+
 
     private void setupExpandAllContextMenus() {
         setupExpandAllContextMenu(pageTree);
@@ -317,18 +333,66 @@ public class MainViewController {
         }
     }
 
-    private void selectSpm(SpmEntry entry) {
-        onStop();
-        canvasController.setCurrentSpm(entry.getSpm(), spmFileHandler.getCurrentDirectory());
-        uiStateController.updateUiForSpm(entry.getSpm());
-
-        int pageCount = Optional.ofNullable(entry.getSpm().getNumPageData()).orElse(0);
-        if (pageCount > 0) {
-            selectPage(0);
-        } else {
-            uiStateController.updateTablesForPage(null);
-            canvasController.clearCanvas();
+    private void loadAndDisplaySpm(SpmEntry entry) {
+        if (entry == currentlyLoadingSpm) {
+            return;
         }
+        currentlyLoadingSpm = entry;
+
+        onStop();
+
+        if (entry == null || entry.getStatus() != SpmEntry.Status.SUCCESS) {
+            uiStateController.clearAllPanels();
+            canvasController.clearCanvas();
+            currentlyLoadingSpm = null;
+            return;
+        }
+
+        progressBar.progressProperty().unbind();
+
+        statusLabel.setText("Loading " + entry.getPath().getFileName() + "...");
+        progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+        progressBar.setVisible(true);
+        // MODIFIED: Clear the animation search field when loading a new file
+        animSearchField.clear();
+        uiStateController.clearAllPanels();
+        canvasController.clearCanvas();
+
+        Task<Void> loadTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                canvasController.setCurrentSpm(entry.getSpm(), spmFileHandler.getCurrentDirectory());
+                return null;
+            }
+        };
+
+        loadTask.setOnSucceeded(e -> {
+            // MODIFIED: Pass null as the filter to indicate a full refresh
+            uiStateController.updateUiForSpm(entry.getSpm(), null);
+
+            int pageCount = Optional.ofNullable(entry.getSpm().getNumPageData()).orElse(0);
+            if (pageCount > 0) {
+                selectPage(0);
+            } else {
+                uiStateController.updateTablesForPage(null);
+                canvasController.clearCanvas();
+            }
+            statusLabel.setText("Ready");
+            progressBar.setVisible(false);
+            currentlyLoadingSpm = null;
+        });
+
+        loadTask.setOnFailed(e -> {
+            statusLabel.setText("Failed to load " + entry.getPath().getFileName());
+            progressBar.setVisible(false);
+            Throwable ex = loadTask.getException();
+            if (ex != null) {
+                ex.printStackTrace();
+            }
+            currentlyLoadingSpm = null;
+        });
+
+        new Thread(loadTask).start();
     }
 
     private void selectPage(Integer index) {
@@ -391,9 +455,10 @@ public class MainViewController {
         alert.initOwner(canvasHolder.getScene().getWindow());
         alert.setTitle("Shortcuts");
         alert.setHeaderText("Keyboard and Mouse Shortcuts");
-        String content = "Play/Pause Media Key: Toggle animation playback\n\n" +
-                "Ctrl + Mouse Scroll: Zoom in/out on the canvas\n\n" +
-                "Middle Mouse Button Drag: Pan the canvas";
+        String content =
+                "Play/Pause Media Key: Toggle animation playback\n\n" +
+                        "Ctrl + Mouse Scroll: Zoom in/out on the canvas\n\n" +
+                        "Middle Mouse Button Drag: Pan the canvas";
         alert.setContentText(content);
         alert.showAndWait();
     }
@@ -416,13 +481,29 @@ public class MainViewController {
         SpmEntry selectedSpm = spmListView.getSelectionModel().getSelectedItem();
         if (selectedSpm == null || selectedSpm.getSpm() == null) return;
 
-        String animName = animSelector.getValue();
-        if (animName == null) return;
+        String displayName = animSelector.getValue();
+        if (displayName == null) return;
 
         onStop();
 
-        var anim = selectedSpm.getSpm().getAnimData().stream()
-                .filter(a -> animName.equals(a.getAnimName())).findFirst().orElse(null);
+        Spm.SPMAnimData anim;
+        try {
+            // MODIFIED: Parse the index from the display name "[index] name"
+            int startIndex = displayName.indexOf('[') + 1;
+            int endIndex = displayName.indexOf(']');
+            if (startIndex == 0 || endIndex == -1) return; // Invalid format
+
+            int animIndex = Integer.parseInt(displayName.substring(startIndex, endIndex));
+            List<Spm.SPMAnimData> animDataList = selectedSpm.getSpm().getAnimData();
+
+            if (animIndex < 0 || animIndex >= animDataList.size()) return; // Index out of bounds
+            anim = animDataList.get(animIndex);
+
+        } catch (NumberFormatException e) {
+            // Could fail if display name format is unexpectedly changed.
+            return;
+        }
+
         if (anim == null) return;
 
         List<KeyFrame> keyFrames = new ArrayList<>();

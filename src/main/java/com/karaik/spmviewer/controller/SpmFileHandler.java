@@ -3,7 +3,7 @@ package com.karaik.spmviewer.controller;
 import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.model.SpmEntry;
 import com.karaik.spmviewer.spm.parser.SpmParser;
-import javafx.collections.ObservableList; // ADDED
+import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
@@ -20,13 +20,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SpmFileHandler {
 
-    // MODIFIED: Changed from ListView to ObservableList to support filtering
     private final ObservableList<SpmEntry> spmList;
     private final ProgressBar progressBar;
     private final Label statusLabel;
     private Path currentDirectory;
 
-    // MODIFIED: Constructor now accepts an ObservableList instead of a ListView
     public SpmFileHandler(ObservableList<SpmEntry> spmList, ProgressBar progressBar, Label statusLabel) {
         this.spmList = spmList;
         this.progressBar = progressBar;
@@ -68,13 +66,16 @@ public class SpmFileHandler {
 
         loadTask.setOnSucceeded(e -> {
             statusLabel.setText("Loaded " + spmList.size() + " SPM files from " + currentDirectory.getFileName());
+            // MODIFIED: Unbind the progress property once the task is complete.
+            progressBar.progressProperty().unbind();
             progressBar.setVisible(false);
-            // MODIFIED: Selection logic is now handled by the controller
         });
 
         loadTask.setOnFailed(e -> {
             log.error("Failed to load SPM directory", loadTask.getException());
             statusLabel.setText("Error loading directory.");
+            // MODIFIED: Also unbind on failure to ensure the progress bar is reusable.
+            progressBar.progressProperty().unbind();
             progressBar.setVisible(false);
         });
 
@@ -101,7 +102,6 @@ public class SpmFileHandler {
                 final int total = spmFiles.size();
                 updateProgress(0, total);
 
-                // MODIFIED: Now clears the master list directly
                 javafx.application.Platform.runLater(spmList::clear);
 
                 for (int i = 0; i < total; i++) {
@@ -119,7 +119,6 @@ public class SpmFileHandler {
                     }
 
                     final SpmEntry finalEntry = entry;
-                    // MODIFIED: Now adds to the master list directly
                     javafx.application.Platform.runLater(() -> spmList.add(finalEntry));
                     updateProgress(i + 1, total);
                     updateMessage("Loading: " + spmPath.getFileName());

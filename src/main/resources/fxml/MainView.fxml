@@ -2,6 +2,7 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
+<?import javafx.scene.control.cell.PropertyValueFactory?>
 <?import javafx.scene.layout.*?>
 
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml"
@@ -20,7 +21,6 @@
                             <MenuItem text="Quit" onAction="#onQuit"/>
                         </items>
                     </Menu>
-                    <!-- MODIFIED: Replaced View menu with Settings menu -->
                     <Menu text="Settings">
                         <items>
                             <MenuItem text="Charset..." onAction="#onShowCharsetSettings"/>
@@ -28,7 +28,6 @@
                     </Menu>
                     <Menu text="Help">
                         <items>
-                            <!-- ADDED: New menu item for shortcuts -->
                             <MenuItem text="Shortcuts" onAction="#onShowShortcuts"/>
                             <MenuItem text="About" onAction="#onAbout"/>
                         </items>
@@ -36,7 +35,6 @@
                 </menus>
             </MenuBar>
 
-            <!-- MODIFIED: Toolbar layout has been significantly changed -->
             <ToolBar>
                 <CheckBox fx:id="alwaysOnTopCheck" text="Always on Top"/>
 
@@ -65,100 +63,134 @@
         </VBox>
     </top>
 
-    <left>
-        <!-- ADDED: VBox to hold search field and the split pane -->
-        <VBox prefWidth="250.0" BorderPane.alignment="CENTER">
-            <children>
-                <TextField fx:id="searchField" promptText="Search files...">
-                    <VBox.margin>
-                        <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
-                    </VBox.margin>
-                </TextField>
-                <SplitPane dividerPositions="0.4" orientation="VERTICAL" VBox.vgrow="ALWAYS">
-                    <items>
-                        <ListView fx:id="spmListView"/>
-                        <Accordion>
-                            <panes>
-                                <TitledPane text="Pages">
-                                    <content>
-                                        <TreeView fx:id="pageTree"/>
-                                    </content>
-                                </TitledPane>
-                                <TitledPane text="Animations">
-                                    <content>
-                                        <TreeView fx:id="animTree"/>
-                                    </content>
-                                </TitledPane>
-                                <TitledPane text="Images">
-                                    <content>
-                                        <ListView fx:id="imageList"/>
-                                    </content>
-                                </TitledPane>
-                            </panes>
-                        </Accordion>
-                    </items>
-                </SplitPane>
-            </children>
-        </VBox>
-    </left>
-
     <center>
-        <ScrollPane fx:id="scrollPane" pannable="true" fitToWidth="true" fitToHeight="true">
-            <content>
-                <StackPane fx:id="canvasHolder">
-                    <padding>
-                        <Insets topRightBottomLeft="8"/>
-                    </padding>
-                </StackPane>
-            </content>
-        </ScrollPane>
-    </center>
+        <SplitPane dividerPositions="0.2, 0.75" BorderPane.alignment="CENTER">
+            <items>
+                <VBox prefWidth="250.0" minWidth="180">
+                    <children>
+                        <TextField fx:id="searchField" promptText="Search files...">
+                            <VBox.margin>
+                                <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
+                            </VBox.margin>
+                        </TextField>
+                        <SplitPane dividerPositions="0.4" orientation="VERTICAL" VBox.vgrow="ALWAYS">
+                            <items>
+                                <ListView fx:id="spmListView"/>
+                                <Accordion>
+                                    <panes>
+                                        <TitledPane text="Pages">
+                                            <content>
+                                                <TreeView fx:id="pageTree"/>
+                                            </content>
+                                        </TitledPane>
+                                        <!-- MODIFICATION START: Added search field for animations -->
+                                        <TitledPane fx:id="animTitledPane" text="Animations">
+                                            <content>
+                                                <VBox spacing="4">
+                                                    <children>
+                                                        <TextField fx:id="animSearchField" promptText="Search animations..."/>
+                                                        <TreeView fx:id="animTree"/>
+                                                    </children>
+                                                    <padding>
+                                                        <Insets topRightBottomLeft="4"/>
+                                                    </padding>
+                                                </VBox>
+                                            </content>
+                                        </TitledPane>
+                                        <!-- MODIFICATION END -->
+                                        <TitledPane text="Images">
+                                            <content>
+                                                <ListView fx:id="imageList"/>
+                                            </content>
+                                        </TitledPane>
+                                    </panes>
+                                </Accordion>
+                            </items>
+                        </SplitPane>
+                    </children>
+                </VBox>
 
-    <right>
-        <VBox spacing="8" BorderPane.alignment="CENTER">
-            <TabPane fx:id="rightTabs" tabClosingPolicy="UNAVAILABLE" prefWidth="420" VBox.vgrow="ALWAYS">
-                <tabs>
-                    <Tab text="Chips">
-                        <content>
-                            <TableView fx:id="chipTable">
-                                <placeholder><Label text="No chips"/></placeholder>
-                            </TableView>
-                        </content>
-                    </Tab>
-                    <Tab text="Hit Areas">
-                        <content>
-                            <TableView fx:id="hitTable">
-                                <placeholder><Label text="No hit areas"/></placeholder>
-                            </TableView>
-                        </content>
-                    </Tab>
-                    <Tab text="Info">
-                        <content>
-                            <ScrollPane fitToWidth="true">
+                <ScrollPane fx:id="scrollPane" pannable="true" fitToWidth="true" fitToHeight="true">
+                    <content>
+                        <StackPane fx:id="canvasHolder">
+                            <padding>
+                                <Insets topRightBottomLeft="8"/>
+                            </padding>
+                        </StackPane>
+                    </content>
+                </ScrollPane>
+
+                <VBox spacing="8" minWidth="200">
+                    <TabPane fx:id="rightTabs" tabClosingPolicy="UNAVAILABLE" prefWidth="420" VBox.vgrow="ALWAYS">
+                        <tabs>
+                            <Tab text="Chips">
                                 <content>
-                                    <GridPane hgap="10" vgap="6">
-                                        <padding>
-                                            <Insets topRightBottomLeft="10"/>
-                                        </padding>
-                                        <children>
-                                            <Label text="SPM Version:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-                                            <Label fx:id="lblVersion" text="-" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
-                                            <Label text="Pages:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-                                            <Label fx:id="lblPages" text="-" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
-                                            <Label text="Images:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-                                            <Label fx:id="lblImages" text="-" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
-                                            <Label text="Animations:" GridPane.columnIndex="0" GridPane.rowIndex="3"/>
-                                            <Label fx:id="lblAnims" text="-" GridPane.columnIndex="1" GridPane.rowIndex="3"/>
-                                        </children>
-                                    </GridPane>
+                                    <TableView fx:id="chipTable">
+                                        <placeholder><Label text="No chips"/></placeholder>
+                                        <columns>
+                                            <TableColumn text="Img #" prefWidth="50">
+                                                <cellValueFactory><PropertyValueFactory property="imageNo" /></cellValueFactory>
+                                            </TableColumn>
+                                            <TableColumn text="Dst Rect" prefWidth="150">
+                                                <cellValueFactory><PropertyValueFactory property="dstRect" /></cellValueFactory>
+                                            </TableColumn>
+                                            <TableColumn text="Src Rect" prefWidth="150">
+                                                <cellValueFactory><PropertyValueFactory property="srcRect" /></cellValueFactory>
+                                            </TableColumn>
+                                        </columns>
+                                    </TableView>
                                 </content>
-                            </ScrollPane>
-                        </content>
-                    </Tab>
-                </tabs>
-            </TabPane>
-        </VBox>
-    </right>
+                            </Tab>
+                            <Tab text="Hit Areas">
+                                <content>
+                                    <TableView fx:id="hitTable">
+                                        <placeholder><Label text="No hit areas"/></placeholder>
+                                        <columns>
+                                            <TableColumn text="Hit Rect" prefWidth="200">
+                                                <cellValueFactory><PropertyValueFactory property="hitRect" /></cellValueFactory>
+                                            </TableColumn>
+                                            <TableColumn text="Unk0" prefWidth="60">
+                                                <cellValueFactory><PropertyValueFactory property="unk0" /></cellValueFactory>
+                                            </TableColumn>
+                                            <TableColumn text="Unk1" prefWidth="60">
+                                                <cellValueFactory><PropertyValueFactory property="unk1" /></cellValueFactory>
+                                            </TableColumn>
+                                            <TableColumn text="Unk2" prefWidth="60">
+                                                <cellValueFactory><PropertyValueFactory property="unk2" /></cellValueFactory>
+                                            </TableColumn>
+                                        </columns>
+                                    </TableView>
+                                </content>
+                            </Tab>
+                            <Tab text="Info">
+                                <content>
+                                    <ScrollPane fitToWidth="true">
+                                        <content>
+                                            <GridPane hgap="10" vgap="6">
+                                                <padding>
+                                                    <Insets topRightBottomLeft="10"/>
+                                                </padding>
+                                                <children>
+                                                    <Label text="SPM Version:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                                                    <Label fx:id="lblVersion" text="-" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                                                    <Label text="Pages:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                                                    <Label fx:id="lblPages" text="-" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                                                    <Label text="Images:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                                                    <Label fx:id="lblImages" text="-" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+                                                    <Label text="Animations:" GridPane.columnIndex="0" GridPane.rowIndex="3"/>
+                                                    <Label fx:id="lblAnims" text="-" GridPane.columnIndex="1" GridPane.rowIndex="3"/>
+                                                </children>
+                                            </GridPane>
+                                        </content>
+                                    </ScrollPane>
+                                </content>
+                            </Tab>
+                        </tabs>
+                    </TabPane>
+                </VBox>
+            </items>
+        </SplitPane>
+    </center>
 
     <bottom>
         <HBox alignment="CENTER_LEFT" spacing="10">
