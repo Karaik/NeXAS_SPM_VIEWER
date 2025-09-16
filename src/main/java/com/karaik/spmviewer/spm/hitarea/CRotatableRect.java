@@ -3,6 +3,7 @@ package com.karaik.spmviewer.spm.hitarea;
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.paint.Color;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -36,6 +37,20 @@ public class CRotatableRect extends Spm.SPMHitArea {
 
     @Override
     public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
+        if (centerX == null || centerY == null || width == null || height == null) return;
 
+        double cx = pageOriginX + centerX;
+        double cy = pageOriginY + centerY;
+        double w = width;
+        double h = height;
+
+        // 暂不考虑旋转角度（未知属性存于attrU16/skipped），以中心对齐绘制轴对齐矩形
+        double x = cx - w / 2.0;
+        double y = cy - h / 2.0;
+
+        g.setFill(new Color(0, 1, 0, 0.25));
+        g.fillRect(x, y, w, h);
+        g.setStroke(Color.LIMEGREEN);
+        g.strokeRect(x, y, w, h);
     }
 }

@@ -3,6 +3,7 @@ package com.karaik.spmviewer.spm.hitarea;
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.paint.Color;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -33,6 +34,18 @@ public class CBox extends Spm.SPMHitArea {
 
     @Override
     public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
+        // 猜测为轴对齐盒：int1,int2中心；int3,int4宽高或半宽半高；
+        if (int1 == null || int2 == null || int3 == null || int4 == null) return;
+        double cx = pageOriginX + int1;
+        double cy = pageOriginY + int2;
+        double w = Math.abs(int3);
+        double h = Math.abs(int4);
+        double x = cx - w / 2.0;
+        double y = cy - h / 2.0;
 
+        g.setFill(new Color(0, 0.8, 0.6, 0.25));
+        g.fillRect(x, y, w, h);
+        g.setStroke(Color.TEAL);
+        g.strokeRect(x, y, w, h);
     }
 }

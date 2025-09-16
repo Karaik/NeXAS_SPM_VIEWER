@@ -3,6 +3,7 @@ package com.karaik.spmviewer.spm.hitarea;
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.paint.Color;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -30,6 +31,20 @@ public class CRect extends Spm.SPMHitArea {
 
     @Override
     public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
+        if (rect == null) return;
+        int L = rect.getLeft() == null ? 0 : rect.getLeft();
+        int T = rect.getTop() == null ? 0 : rect.getTop();
+        int R = rect.getRight() == null ? 0 : rect.getRight();
+        int B = rect.getBottom() == null ? 0 : rect.getBottom();
 
+        double x = pageOriginX + Math.min(L, R);
+        double y = pageOriginY + Math.min(T, B);
+        double w = Math.abs(R - L);
+        double h = Math.abs(B - T);
+
+        g.setFill(new Color(1, 0, 0, 0.25));
+        g.fillRect(x, y, w, h);
+        g.setStroke(Color.RED);
+        g.strokeRect(x, y, w, h);
     }
 }

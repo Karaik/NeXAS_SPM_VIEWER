@@ -3,6 +3,7 @@ package com.karaik.spmviewer.spm.hitarea;
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.paint.Color;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -31,6 +32,17 @@ public class C2DLineSegment extends Spm.SPMHitArea {
 
     @Override
     public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
-
+        if (x1 == null || y1 == null || x2 == null || y2 == null) return;
+        double sx = pageOriginX + x1;
+        double sy = pageOriginY + y1;
+        double ex = pageOriginX + x2;
+        double ey = pageOriginY + y2;
+        g.setStroke(Color.SKYBLUE);
+        g.setLineWidth(1.5);
+        g.strokeLine(sx, sy, ex, ey);
+        // 端点
+        g.setFill(Color.SKYBLUE);
+        g.fillOval(sx - 2, sy - 2, 4, 4);
+        g.fillOval(ex - 2, ey - 2, 4, 4);
     }
 }

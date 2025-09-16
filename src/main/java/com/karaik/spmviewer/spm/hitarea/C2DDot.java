@@ -3,6 +3,7 @@ package com.karaik.spmviewer.spm.hitarea;
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.paint.Color;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -27,6 +28,12 @@ public class C2DDot extends Spm.SPMHitArea {
 
     @Override
     public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
-
+        if (x == null || y == null) return;
+        double px = pageOriginX + x;
+        double py = pageOriginY + y;
+        g.setFill(Color.YELLOW);
+        g.fillOval(px - 2, py - 2, 4, 4);
+        g.setStroke(Color.GOLD);
+        g.strokeOval(px - 2, py - 2, 4, 4);
     }
 }
