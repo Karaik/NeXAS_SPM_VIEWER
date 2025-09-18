@@ -7,45 +7,57 @@ import javafx.scene.paint.Color;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+/**
+ * 轴对齐的三维包围盒，渲染时仅绘制其在 XY 平面的投影。
+ */
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class CBox extends Spm.SPMHitArea {
-    private Integer int1;
-    private Integer int2;
-    private Integer int3;
-    private Integer int4;
-    private Integer int5;
-    private Integer int6;
+    // 包围盒在页面坐标系中的最小 X。
+    private Integer minX;
+    // 包围盒在页面坐标系中的最小 Y。
+    private Integer minY;
+    // 包围盒在页面坐标系中的最小 Z。
+    private Integer minZ;
+    // 包围盒在页面坐标系中的最大 X。
+    private Integer maxX;
+    // 包围盒在页面坐标系中的最大 Y。
+    private Integer maxY;
+    // 包围盒在页面坐标系中的最大 Z。
+    private Integer maxZ;
 
     @Override
     public void readInfo(BinaryReader reader) throws Exception {
-        int1 = reader.readInt();
-        int2 = reader.readInt();
-        int3 = reader.readInt();
-        int4 = reader.readInt();
-        int5 = reader.readInt();
-        int6 = reader.readInt();
+        minX = reader.readInt();
+        minY = reader.readInt();
+        minZ = reader.readInt();
+        maxX = reader.readInt();
+        maxY = reader.readInt();
+        maxZ = reader.readInt();
     }
 
     @Override
     public String getDisplayInfo() {
-        return String.format("Box (unk: %d, %d, %d, %d, %d, %d)", int1, int2, int3, int4, int5, int6);
+        return String.format(
+                "Box (x: %d-%d, y: %d-%d, z: %d-%d)",
+                minX, maxX, minY, maxY, minZ, maxZ
+        );
     }
 
     @Override
     public void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY) {
-        // 猜测为轴对齐盒：int1,int2中心；int3,int4宽高或半宽半高；
-        if (int1 == null || int2 == null || int3 == null || int4 == null) return;
-        double cx = pageOriginX + int1;
-        double cy = pageOriginY + int2;
-        double w = Math.abs(int3);
-        double h = Math.abs(int4);
-        double x = cx - w / 2.0;
-        double y = cy - h / 2.0;
+        if (minX == null || minY == null || maxX == null || maxY == null) {
+            return;
+        }
+
+        double left = pageOriginX + Math.min(minX, maxX);
+        double top = pageOriginY + Math.min(minY, maxY);
+        double width = Math.abs(maxX - minX);
+        double height = Math.abs(maxY - minY);
 
         g.setFill(new Color(0, 0.8, 0.6, 0.25));
-        g.fillRect(x, y, w, h);
+        g.fillRect(left, top, width, height);
         g.setStroke(Color.TEAL);
-        g.strokeRect(x, y, w, h);
+        g.strokeRect(left, top, width, height);
     }
 }

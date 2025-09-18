@@ -10,9 +10,13 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class C2DLineSegment extends Spm.SPMHitArea {
+    // 线段起点的 X 坐标。
     private Integer x1;
+    // 线段起点的 Y 坐标。
     private Integer y1;
+    // 线段终点的 X 坐标。
     private Integer x2;
+    // 线段终点的 Y 坐标。
     private Integer y2;
     private byte[] skippedBytes;
 
@@ -40,7 +44,7 @@ public class C2DLineSegment extends Spm.SPMHitArea {
         g.setStroke(Color.SKYBLUE);
         g.setLineWidth(1.5);
         g.strokeLine(sx, sy, ex, ey);
-        // 端点
+        // 端点标记，便于在画布中查看方向。
         g.setFill(Color.SKYBLUE);
         g.fillOval(sx - 2, sy - 2, 4, 4);
         g.fillOval(ex - 2, ey - 2, 4, 4);

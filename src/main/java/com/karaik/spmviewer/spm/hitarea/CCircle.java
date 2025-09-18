@@ -10,9 +10,12 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class CCircle extends Spm.SPMHitArea {
+    // 圆心在页面坐标系中的 X 坐标。
     private Integer centerX;
+    // 圆心在页面坐标系中的 Y 坐标。
     private Integer centerY;
     private byte[] skippedBytes;
+    // 圆在游戏单位下的半径。
     private Integer radius;
 
     @Override
@@ -25,7 +28,7 @@ public class CCircle extends Spm.SPMHitArea {
 
     @Override
     public String getDisplayInfo() {
-        return String.format("Circle (CirclePoint: %d, %d, half: %d)", centerX, centerY, radius);
+        return String.format("Circle (center: %d,%d r=%d)", centerX, centerY, radius);
     }
 
     @Override

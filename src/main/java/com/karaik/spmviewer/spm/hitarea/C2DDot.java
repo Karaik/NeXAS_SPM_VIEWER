@@ -10,7 +10,9 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class C2DDot extends Spm.SPMHitArea {
+    // 单点命中区域的 X 坐标。
     private Integer x;
+    // 单点命中区域的 Y 坐标。
     private Integer y;
     private byte[] skippedBytes;
 

@@ -10,11 +10,17 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class DefaultHitArea extends Spm.SPMHitArea {
+    // 区域在页面坐标系中的最小 X。
     private Integer xMin;
+    // 区域在页面坐标系中的最大 X。
     private Integer xMax;
+    // 区域在页面坐标系中的最小 Y。
     private Integer yMin;
+    // 区域在页面坐标系中的最大 Y。
     private Integer yMax;
+    // 区域在页面坐标系中的最小 Z。
     private Integer zMin;
+    // 区域在页面坐标系中的最大 Z。
     private Integer zMax;
 
     @Override

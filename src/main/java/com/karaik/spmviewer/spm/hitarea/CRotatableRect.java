@@ -10,12 +10,17 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class CRotatableRect extends Spm.SPMHitArea {
+    // 矩形中心点的 X 坐标。
     private Integer centerX;
+    // 矩形中心点的 Y 坐标。
     private Integer centerY;
     private byte[] skippedBytes1;
+    // 矩形的宽度（像素）。
     private Integer width;
+    // 矩形的高度（像素）。
     private Integer height;
     private byte[] skippedBytes2;
+    // 低 16 位的状态标志；旋转信息可能存放于此，尚待确认。
     private Integer attrU16;
 
     @Override
@@ -44,7 +49,7 @@ public class CRotatableRect extends Spm.SPMHitArea {
         double w = width;
         double h = height;
 
-        // 暂不考虑旋转角度（未知属性存于attrU16/skipped），以中心对齐绘制轴对齐矩形
+        // 暂未验证旋转角度，先按轴对齐矩形绘制。
         double x = cx - w / 2.0;
         double y = cy - h / 2.0;
 
