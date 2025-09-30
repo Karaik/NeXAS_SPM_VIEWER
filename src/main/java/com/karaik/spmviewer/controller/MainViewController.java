@@ -57,6 +57,7 @@ public class MainViewController {
     @FXML private Slider zoomSlider;
     @FXML private TextField zoomField;
     @FXML private ComboBox<String> animSelector;
+    @FXML private CheckBox autoPlayCheck;
     @FXML private Slider fpsSlider;
     @FXML private TextField fpsField;
     @FXML private CheckBox alwaysOnTopCheck;
@@ -140,6 +141,16 @@ public class MainViewController {
     private void setupDisplayOptionListeners() {
         showCoordsCheck.selectedProperty().addListener((obs, oldVal, newVal) -> renderCurrentPage());
         showHitboxCheck.selectedProperty().addListener((obs, oldVal, newVal) -> renderCurrentPage());
+
+        autoPlayCheck.setSelected(Settings.isAutoPlayEnabled());
+        autoPlayCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            Settings.setAutoPlayEnabled(newVal);
+            if (!newVal) {
+                onStop();
+            } else if (animSelector.getValue() != null) {
+                onPlay();
+            }
+        });
     }
 
     private void setupBackgroundControls() {
@@ -231,7 +242,15 @@ public class MainViewController {
             }
         });
 
-        animSelector.setOnAction(e -> { if (animSelector.getValue() != null) onPlay(); });
+        animSelector.setOnAction(e -> {
+            if (animSelector.getValue() != null) {
+                if (autoPlayCheck.isSelected()) {
+                    onPlay();
+                } else {
+                    onStop();
+                }
+            }
+        });
         alwaysOnTopCheck.selectedProperty().addListener((obs, oldVal, newVal) -> ((Stage) canvasHolder.getScene().getWindow()).setAlwaysOnTop(newVal));
         canvasHolder.sceneProperty().addListener((obs, oldScene, newScene) -> { if (newScene != null) setupKeyboardShortcuts(newScene); });
     }

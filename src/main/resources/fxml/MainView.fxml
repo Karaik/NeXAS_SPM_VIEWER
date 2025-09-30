@@ -32,6 +32,7 @@
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.FlowPane?>
 
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml"
             fx:controller="com.karaik.spmviewer.controller.MainViewController">
@@ -44,7 +45,7 @@
                         <items>
                             <MenuItem text="Open Directory..." onAction="#onOpenDirectory"/>
                             <SeparatorMenuItem/>
-                            <MenuItem text="Export Canvas as PNG…" onAction="#onExportPng"/>
+                            <MenuItem text="Export Canvas as PNG..." onAction="#onExportPng"/>
                             <SeparatorMenuItem/>
                             <MenuItem text="Quit" onAction="#onQuit"/>
                         </items>
@@ -64,41 +65,51 @@
             </MenuBar>
 
             <ToolBar>
-                <Label text="Parsing Mode:"/>
-                <ComboBox fx:id="parsingModeSelector" prefWidth="200"/>
-                <Separator orientation="VERTICAL"/>
+                <items>
+                    <FlowPane fx:id="toolbarFlow" hgap="12" vgap="8" prefWrapLength="900">
+                        <children>
+                            <HBox alignment="CENTER_LEFT" spacing="6">
+                                <Label text="Parsing Mode:"/>
+                                <ComboBox fx:id="parsingModeSelector" prefWidth="200"/>
+                            </HBox>
 
-                <CheckBox fx:id="alwaysOnTopCheck" text="Always on Top"/>
-                <Separator orientation="VERTICAL"/>
+                            <HBox alignment="CENTER_LEFT" spacing="6">
+                                <CheckBox fx:id="alwaysOnTopCheck" text="Always on Top"/>
+                                <CheckBox fx:id="showCoordsCheck" text="Show Coordinate System"/>
+                                <CheckBox fx:id="showHitboxCheck" text="Show Hitboxes"/>
+                            </HBox>
 
-                <CheckBox fx:id="showCoordsCheck" text="Show Coordinate System"/>
-                <CheckBox fx:id="showHitboxCheck" text="Show Hitboxes"/>
-                <Separator orientation="VERTICAL"/>
+                            <HBox alignment="CENTER_LEFT" spacing="6">
+                                <Label text="Background:"/>
+                                <ComboBox fx:id="backgroundModeSelector" prefWidth="140"/>
+                                <ColorPicker fx:id="backgroundColorPicker"/>
+                            </HBox>
 
-                <Label text="Background:"/>
-                <ComboBox fx:id="backgroundModeSelector" prefWidth="120"/>
-                <ColorPicker fx:id="backgroundColorPicker"/>
-                <Separator orientation="VERTICAL"/>
+                            <HBox alignment="CENTER_LEFT" spacing="6">
+                                <Label text="Zoom:"/>
+                                <Slider fx:id="zoomSlider" min="0.1" max="8.0" value="1.0" prefWidth="160"/>
+                                <TextField fx:id="zoomField" prefWidth="60"/>
+                                <Button text="100%" onAction="#onZoom1x"/>
+                                <Button text="Fit" onAction="#onFit"/>
+                            </HBox>
 
-                <Label text="Zoom:"/>
-                <Slider fx:id="zoomSlider" min="0.1" max="8.0" value="1.0" prefWidth="120"/>
-                <TextField fx:id="zoomField" prefWidth="60"/>
-                <Button text="100%" onAction="#onZoom1x"/>
-                <Button text="Fit" onAction="#onFit"/>
+                            <HBox alignment="CENTER_LEFT" spacing="6">
+                                <Label text="Anim:"/>
+                                <ComboBox fx:id="animSelector" prefWidth="200"/>
+                                <CheckBox fx:id="autoPlayCheck" text="Auto Play"/>
+                                <Button text="▶" onAction="#onPlay"/>
+                                <Button text="■" onAction="#onStop"/>
+                                <Label text="FPS:"/>
+                                <Slider fx:id="fpsSlider" min="1" max="60" value="2" prefWidth="140"/>
+                                <TextField fx:id="fpsField" prefWidth="50"/>
+                            </HBox>
 
-                <Separator orientation="VERTICAL"/>
-
-                <Label text="Anim:"/>
-                <ComboBox fx:id="animSelector" prefWidth="180"/>
-                <Button text="▶" onAction="#onPlay"/>
-                <Button text="⏹" onAction="#onStop"/>
-                <Label text="FPS:"/>
-                <Slider fx:id="fpsSlider" min="1" max="60" value="2" prefWidth="100"/>
-                <TextField fx:id="fpsField" prefWidth="50"/>
-
-                <Pane HBox.hgrow="ALWAYS"/> <!-- Spacer -->
-
-                <Button text="Export PNG" onAction="#onExportPng"/>
+                            <HBox alignment="CENTER_LEFT" spacing="6">
+                                <Button text="Export PNG" onAction="#onExportPng"/>
+                            </HBox>
+                        </children>
+                    </FlowPane>
+                </items>
             </ToolBar>
         </VBox>
     </top>
@@ -242,3 +253,4 @@
         </HBox>
     </bottom>
 </BorderPane>
+

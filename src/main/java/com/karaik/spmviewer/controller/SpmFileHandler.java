@@ -27,6 +27,7 @@ public class SpmFileHandler {
     private final ProgressBar progressBar;
     private final Label statusLabel;
     private Path currentDirectory;
+    private long loadSequence = 0;
 
     public SpmFileHandler(
             ObservableList<SpmEntry> spmList,
@@ -69,16 +70,22 @@ public class SpmFileHandler {
     public void loadDirectory(Path directory) {
         if (directory == null || !Files.isDirectory(directory)) return;
 
+        final long mySeq = ++loadSequence;
         this.currentDirectory = directory;
         Settings.setLastDirectory(currentDirectory.toAbsolutePath().toString());
 
         final Settings.ParsingMode selectedMode = Settings.getParsingMode();
-        Task<List<SpmEntry>> loadTask = createLoadTask(currentDirectory, selectedMode);
+        Task<List<SpmEntry>> loadTask = createLoadTask(directory, selectedMode);
 
+        progressBar.progressProperty().unbind();
         progressBar.progressProperty().bind(loadTask.progressProperty());
         progressBar.setVisible(true);
 
         loadTask.setOnSucceeded(e -> {
+            if (mySeq != loadSequence) {
+                log.debug("Discarded stale directory load for {}", directory.getFileName());
+                return;
+            }
             spmList.setAll(loadTask.getValue());
             statusLabel.setText("Loaded " + spmList.size() + " SPM files from " + currentDirectory.getFileName());
             progressBar.progressProperty().unbind();
@@ -86,13 +93,19 @@ public class SpmFileHandler {
         });
 
         loadTask.setOnFailed(e -> {
+            if (mySeq != loadSequence) {
+                log.debug("Discarded stale directory load failure for {}", directory.getFileName());
+                return;
+            }
             log.error("Failed to load SPM directory", loadTask.getException());
             statusLabel.setText("Error loading directory.");
             progressBar.progressProperty().unbind();
             progressBar.setVisible(false);
         });
 
-        new Thread(loadTask).start();
+        Thread loaderThread = new Thread(loadTask, "spm-loader-" + mySeq);
+        loaderThread.setDaemon(true);
+        loaderThread.start();
     }
 
     private Task<List<SpmEntry>> createLoadTask(Path directory, Settings.ParsingMode mode) {

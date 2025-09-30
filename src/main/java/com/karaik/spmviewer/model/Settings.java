@@ -7,11 +7,14 @@ import java.util.prefs.Preferences;
 
 public class Settings {
 
+    private static final Preferences PREFS = Preferences.userNodeForPackage(Settings.class);
+
     private static final String CHARSET_KEY = "charset";
     private static final String LAST_DIRECTORY_KEY = "lastDirectory";
     private static final String PARSING_MODE_KEY = "parsingMode";
     private static final String BG_MODE_KEY = "backgroundMode";
     private static final String BG_COLOR_KEY = "backgroundColor";
+    private static final String AUTO_PLAY_KEY = "autoPlayAnimations";
     private static final String DEFAULT_CHARSET = "windows-31j";
 
     /**
@@ -40,12 +43,12 @@ public class Settings {
     private static ParsingMode currentParsingMode = ParsingMode.VER_2_00_BHE;
     private static BackgroundMode currentBackgroundMode = BackgroundMode.CHECKERBOARD;
     private static Color currentBackgroundColor = Color.rgb(30, 30, 30);
+    private static boolean currentAutoPlayEnabled = true;
 
     static {
-        Preferences prefs = Preferences.userNodeForPackage(Settings.class);
-        currentCharsetName = prefs.get(CHARSET_KEY, DEFAULT_CHARSET);
+        currentCharsetName = PREFS.get(CHARSET_KEY, DEFAULT_CHARSET);
 
-        String modeName = prefs.get(PARSING_MODE_KEY, ParsingMode.VER_2_00_BHE.name());
+        String modeName = PREFS.get(PARSING_MODE_KEY, ParsingMode.VER_2_00_BHE.name());
         try {
             currentParsingMode = ParsingMode.valueOf(modeName);
         } catch (IllegalArgumentException e) {
@@ -53,19 +56,21 @@ public class Settings {
         }
 
         // Background settings
-        String bgModeName = prefs.get(BG_MODE_KEY, BackgroundMode.CHECKERBOARD.name());
+        String bgModeName = PREFS.get(BG_MODE_KEY, BackgroundMode.CHECKERBOARD.name());
         try {
             currentBackgroundMode = BackgroundMode.valueOf(bgModeName);
         } catch (IllegalArgumentException e) {
             currentBackgroundMode = BackgroundMode.CHECKERBOARD;
         }
 
-        String colorString = prefs.get(BG_COLOR_KEY, Color.rgb(30, 30, 30).toString());
+        String colorString = PREFS.get(BG_COLOR_KEY, Color.rgb(30, 30, 30).toString());
         try {
             currentBackgroundColor = Color.web(colorString);
         } catch (Exception e) {
             currentBackgroundColor = Color.rgb(30, 30, 30);
         }
+
+        currentAutoPlayEnabled = PREFS.getBoolean(AUTO_PLAY_KEY, true);
     }
 
     public static String getCharsetName() { return currentCharsetName; }
@@ -78,18 +83,20 @@ public class Settings {
             try {
                 Charset.forName(charsetName);
                 currentCharsetName = charsetName;
-                Preferences.userNodeForPackage(Settings.class).put(CHARSET_KEY, currentCharsetName);
-            } catch (Exception e) { System.err.println("Invalid charset name provided: " + charsetName); }
+                PREFS.put(CHARSET_KEY, currentCharsetName);
+            } catch (Exception e) {
+                System.err.println("Invalid charset name provided: " + charsetName);
+            }
         }
     }
 
     public static String getLastDirectory() {
-        return Preferences.userNodeForPackage(Settings.class).get(LAST_DIRECTORY_KEY, null);
+        return PREFS.get(LAST_DIRECTORY_KEY, null);
     }
 
     public static void setLastDirectory(String path) {
         if (path != null && !path.isEmpty()) {
-            Preferences.userNodeForPackage(Settings.class).put(LAST_DIRECTORY_KEY, path);
+            PREFS.put(LAST_DIRECTORY_KEY, path);
         }
     }
 
@@ -97,7 +104,7 @@ public class Settings {
     public static void setParsingMode(ParsingMode mode) {
         if (mode != null) {
             currentParsingMode = mode;
-            Preferences.userNodeForPackage(Settings.class).put(PARSING_MODE_KEY, currentParsingMode.name());
+            PREFS.put(PARSING_MODE_KEY, currentParsingMode.name());
         }
     }
 
@@ -105,7 +112,7 @@ public class Settings {
     public static void setBackgroundMode(BackgroundMode mode) {
         if (mode != null) {
             currentBackgroundMode = mode;
-            Preferences.userNodeForPackage(Settings.class).put(BG_MODE_KEY, currentBackgroundMode.name());
+            PREFS.put(BG_MODE_KEY, currentBackgroundMode.name());
         }
     }
 
@@ -113,7 +120,16 @@ public class Settings {
     public static void setBackgroundColor(Color color) {
         if (color != null) {
             currentBackgroundColor = color;
-            Preferences.userNodeForPackage(Settings.class).put(BG_COLOR_KEY, color.toString());
+            PREFS.put(BG_COLOR_KEY, color.toString());
         }
+    }
+
+    public static boolean isAutoPlayEnabled() {
+        return currentAutoPlayEnabled;
+    }
+
+    public static void setAutoPlayEnabled(boolean enabled) {
+        currentAutoPlayEnabled = enabled;
+        PREFS.putBoolean(AUTO_PLAY_KEY, enabled);
     }
 }
