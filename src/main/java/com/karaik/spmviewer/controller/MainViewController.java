@@ -16,18 +16,27 @@ import javafx.scene.Group;
 import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.PixelFormat;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.WritableImage;
 import javafx.scene.input.*;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+
+import java.awt.image.BufferedImage;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 import javafx.util.converter.NumberStringConverter;
 import lombok.extern.slf4j.Slf4j;
 
+import javax.imageio.ImageIO;
 import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.DecimalFormat;
@@ -39,7 +48,6 @@ import java.util.Optional;
 @Slf4j
 public class MainViewController {
 
-    //<editor-fold desc="FXML 控件注入">
     @FXML private ComboBox<Settings.ParsingMode> parsingModeSelector;
     @FXML private CheckBox showCoordsCheck;
     @FXML private CheckBox showHitboxCheck;
@@ -374,17 +382,21 @@ public class MainViewController {
         canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
 
         // 后台任务：只做耗时的IO/解析，避免访问FX线程对象
-        Task<Void> loadTask = new Task<>() {
-            @Override protected Void call() {
-                canvasController.setCurrentSpm(entry.getSpm(), spmFileHandler.getCurrentDirectory());
-                return null;
+        Task<List<Image>> loadTask = new Task<>() {
+            @Override protected List<Image> call() {
+                return canvasController.loadImages(entry.getSpm(), spmFileHandler.getCurrentDirectory());
             }
         };
 
         loadTask.setOnSucceeded(e -> {
             // 如果在此期间又点了别的文件，这次结果作废
-            if (myGen != loadGen) return;
+            if (myGen != loadGen) {
+                log.debug("Discarded stale image load for {}", entry.getPath().getFileName());
+                return;
+            }
 
+            List<Image> images = Optional.ofNullable(loadTask.getValue()).orElse(List.of());
+            canvasController.setCurrentSpm(entry.getSpm(), images);
             uiStateController.updateUiForSpm(entry.getSpm(), null);
             if (Optional.ofNullable(entry.getSpm().getNumPageData()).orElse(0) > 0) selectPage(0);
             else {
@@ -400,7 +412,10 @@ public class MainViewController {
         });
 
         loadTask.setOnFailed(e -> {
-            if (myGen != loadGen) return;
+            if (myGen != loadGen) {
+                log.debug("Discarded stale image load failure for {}", entry.getPath().getFileName());
+                return;
+            }
             log.error("Failed to load {}", entry.getPath().getFileName(), loadTask.getException());
             statusLabel.setText("Failed to load " + entry.getPath().getFileName());
             progressBar.setVisible(false);
@@ -428,6 +443,7 @@ public class MainViewController {
         onStop();
         pageTree.getSelectionModel().clearSelection();
         uiStateController.updateTablesForPage(null);
+        log.debug("Previewing image index {} ({})", index, imageName);
         canvasController.previewImage(index, imageName, Settings.getBackgroundMode(), Settings.getBackgroundColor());
         Platform.runLater(this::centerScrollPane);
     }
@@ -465,10 +481,27 @@ public class MainViewController {
         if (out == null) return;
         try {
             var snapshot = canvasController.getCanvas().snapshot(new SnapshotParameters(), null);
-            javax.imageio.ImageIO.write(javafx.embed.swing.SwingFXUtils.fromFXImage(snapshot, null), "png", out);
+            writePng(snapshot, out.toPath());
             statusLabel.setText("Exported: " + out.getName());
         } catch (Exception ex) {
             new Alert(Alert.AlertType.ERROR, "Export failed: " + ex.getMessage()).showAndWait();
+        }
+    }
+
+    private void writePng(WritableImage image, Path path) throws IOException {
+        int width = (int) image.getWidth();
+        int height = (int) image.getHeight();
+        PixelReader reader = image.getPixelReader();
+        BufferedImage buffered = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        int[] buffer = new int[width];
+        for (int y = 0; y < height; y++) {
+            reader.getPixels(0, y, width, 1, PixelFormat.getIntArgbPreInstance(), buffer, 0, width);
+            for (int x = 0; x < width; x++) {
+                buffered.setRGB(x, y, buffer[x]);
+            }
+        }
+        try (OutputStream os = Files.newOutputStream(path)) {
+            ImageIO.write(buffered, "png", os);
         }
     }
 

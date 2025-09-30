@@ -10,13 +10,15 @@ import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
-import java.io.FileInputStream;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Data
 public class CanvasController {
 
@@ -37,10 +39,24 @@ public class CanvasController {
         canvasGroup.getChildren().add(canvas);
     }
 
-    public void setCurrentSpm(Spm spm, Path imageDirectory) {
+    public void setCurrentSpm(Spm spm, List<Image> images) {
         this.currentSpm = spm;
         this.currentPageIndex = -1;
-        loadImages(imageDirectory);
+        loadedImages.clear();
+        if (images != null) {
+            loadedImages.addAll(images);
+        }
+    }
+
+    public List<Image> loadImages(Spm spm, Path dir) {
+        List<Image> images = new ArrayList<>();
+        if (spm == null || spm.getImageData() == null) {
+            return images;
+        }
+        for (Spm.SPMImageData imageData : spm.getImageData()) {
+            images.add(loadImage(dir, imageData.getImageName()));
+        }
+        return images;
     }
 
     public void renderPage(boolean showCoords, boolean showHitboxes, Settings.BackgroundMode bgMode, Color bgColor) {
@@ -78,22 +94,20 @@ public class CanvasController {
         renderer.drawBackground(g, canvas.getWidth(), canvas.getHeight(), bgMode, bgColor);
     }
 
-    private void loadImages(Path dir) {
-        loadedImages.clear();
-        if (currentSpm == null || currentSpm.getImageData() == null || dir == null) return;
-
-        for (Spm.SPMImageData imageData : currentSpm.getImageData()) {
-            Image loadedImage = null;
-            String name = imageData.getImageName();
-            if (name != null && !name.isEmpty()) {
-                Path p = dir.resolve(name);
-                if (Files.exists(p)) {
-                    try {
-                        loadedImage = new Image(new FileInputStream(p.toFile()));
-                    } catch (Exception ignored) {}
-                }
-            }
-            loadedImages.add(loadedImage);
+    private Image loadImage(Path dir, String name) {
+        if (dir == null || name == null || name.isBlank()) {
+            return null;
+        }
+        Path path = dir.resolve(name);
+        if (!Files.exists(path)) {
+            log.debug("Image asset {} not found under {}", name, dir);
+            return null;
+        }
+        try (InputStream input = Files.newInputStream(path)) {
+            return new Image(input);
+        } catch (Exception ex) {
+            log.warn("Failed to load image {}", path.getFileName(), ex);
+            return null;
         }
     }
 }
