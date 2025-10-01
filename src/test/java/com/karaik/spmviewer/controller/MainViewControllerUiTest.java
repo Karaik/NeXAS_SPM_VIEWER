@@ -1,4 +1,4 @@
-﻿package com.karaik.spmviewer.controller;
+package com.karaik.spmviewer.controller;
 
 import com.karaik.spmviewer.model.Settings;
 import javafx.application.Platform;

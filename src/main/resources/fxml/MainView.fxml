@@ -65,52 +65,64 @@
             </MenuBar>
 
             <ToolBar>
-                <items>
-                    <FlowPane fx:id="toolbarFlow" hgap="12" vgap="8" prefWrapLength="900">
-                        <children>
-                            <HBox alignment="CENTER_LEFT" spacing="6">
-                                <Label text="Parsing Mode:"/>
-                                <ComboBox fx:id="parsingModeSelector" prefWidth="200"/>
-                            </HBox>
+    <items>
+        <FlowPane fx:id="toolbarFlow" hgap="12" vgap="8" prefWrapLength="900">
+            <children>
+                <HBox alignment="CENTER_LEFT" spacing="6">
+                    <Label text="Parsing Mode:"/>
+                    <ComboBox fx:id="parsingModeSelector" prefWidth="200"/>
+                </HBox>
 
-                            <HBox alignment="CENTER_LEFT" spacing="6">
-                                <CheckBox fx:id="alwaysOnTopCheck" text="Always on Top"/>
-                                <CheckBox fx:id="showCoordsCheck" text="Show Coordinate System"/>
-                                <CheckBox fx:id="showHitboxCheck" text="Show Hitboxes"/>
-                            </HBox>
+                <HBox alignment="CENTER_LEFT" spacing="6">
+                    <Label text="Origin:"/>
+                    <ComboBox fx:id="originModeSelector" prefWidth="140"/>
+                </HBox>
 
-                            <HBox alignment="CENTER_LEFT" spacing="6">
-                                <Label text="Background:"/>
-                                <ComboBox fx:id="backgroundModeSelector" prefWidth="140"/>
-                                <ColorPicker fx:id="backgroundColorPicker"/>
-                            </HBox>
+                <HBox alignment="CENTER_LEFT" spacing="6">
+                    <CheckBox fx:id="alwaysOnTopCheck" text="Always on Top"/>
+                    <CheckBox fx:id="showCoordsCheck" text="Show Coordinate System"/>
+                    <CheckBox fx:id="showHitboxCheck" text="Show Hitboxes"/>
+                    <CheckBox fx:id="showChipBoundsCheck" text="Show Chip Bounds"/>
+                    <CheckBox fx:id="showPageBoundsCheck" text="Show Page Bounds"/>
+                </HBox>
 
-                            <HBox alignment="CENTER_LEFT" spacing="6">
-                                <Label text="Zoom:"/>
-                                <Slider fx:id="zoomSlider" min="0.1" max="8.0" value="1.0" prefWidth="160"/>
-                                <TextField fx:id="zoomField" prefWidth="60"/>
-                                <Button text="100%" onAction="#onZoom1x"/>
-                                <Button text="Fit" onAction="#onFit"/>
-                            </HBox>
+                <HBox alignment="CENTER_LEFT" spacing="6">
+                    <Label text="Background:"/>
+                    <ComboBox fx:id="backgroundModeSelector" prefWidth="140"/>
+                    <ColorPicker fx:id="backgroundColorPicker"/>
+                </HBox>
 
-                            <HBox alignment="CENTER_LEFT" spacing="6">
-                                <Label text="Anim:"/>
-                                <ComboBox fx:id="animSelector" prefWidth="200"/>
-                                <CheckBox fx:id="autoPlayCheck" text="Auto Play"/>
-                                <Button text="▶" onAction="#onPlay"/>
-                                <Button text="■" onAction="#onStop"/>
-                                <Label text="FPS:"/>
-                                <Slider fx:id="fpsSlider" min="1" max="60" value="2" prefWidth="140"/>
-                                <TextField fx:id="fpsField" prefWidth="50"/>
-                            </HBox>
+                <HBox alignment="CENTER_LEFT" spacing="6">
+                    <Label text="Zoom:"/>
+                    <Slider fx:id="zoomSlider" min="0.1" max="8.0" value="1.0" prefWidth="160"/>
+                    <TextField fx:id="zoomField" prefWidth="60"/>
+                    <Button text="100%" onAction="#onZoom1x"/>
+                    <Button text="Fit" onAction="#onFit"/>
+                </HBox>
 
-                            <HBox alignment="CENTER_LEFT" spacing="6">
-                                <Button text="Export PNG" onAction="#onExportPng"/>
-                            </HBox>
-                        </children>
-                    </FlowPane>
-                </items>
-            </ToolBar>
+                <HBox alignment="CENTER_LEFT" spacing="6">
+                    <Label text="Anim:"/>
+                    <ComboBox fx:id="animSelector" prefWidth="200"/>
+                    <CheckBox fx:id="autoPlayCheck" text="Auto Play"/>
+                    <Button text="Step &lt;" onAction="#onStepPrev"/>
+                    <Button text="Play" onAction="#onPlay"/>
+                    <Button text="Stop" onAction="#onStop"/>
+                    <Button text="Step &gt;" onAction="#onStepNext"/>
+                    <Label text="Frame:"/>
+                    <Slider fx:id="animFrameSlider" min="0" max="0" value="0" prefWidth="140"/>
+                    <Label fx:id="animFrameLabel" text="0/0"/>
+                    <Label text="FPS:"/>
+                    <Slider fx:id="fpsSlider" min="1" max="60" value="2" prefWidth="140"/>
+                    <TextField fx:id="fpsField" prefWidth="50"/>
+                </HBox>
+
+                <HBox alignment="CENTER_LEFT" spacing="6">
+                    <Button text="Export PNG" onAction="#onExportPng"/>
+                </HBox>
+            </children>
+        </FlowPane>
+    </items>
+</ToolBar>
         </VBox>
     </top>
 

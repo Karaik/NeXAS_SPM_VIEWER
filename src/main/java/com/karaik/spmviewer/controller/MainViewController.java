@@ -22,6 +22,7 @@ import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.*;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
 import javafx.stage.FileChooser;
@@ -42,8 +43,12 @@ import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+
+import com.karaik.spmviewer.controller.AnimationPlanBuilder;
+import com.karaik.spmviewer.controller.AnimationPlanBuilder.AnimationFrame;
 
 @Slf4j
 public class MainViewController {
@@ -51,13 +56,18 @@ public class MainViewController {
     @FXML private ComboBox<Settings.ParsingMode> parsingModeSelector;
     @FXML private CheckBox showCoordsCheck;
     @FXML private CheckBox showHitboxCheck;
+    @FXML private CheckBox showChipBoundsCheck;
+    @FXML private CheckBox showPageBoundsCheck;
     @FXML private ComboBox<Settings.BackgroundMode> backgroundModeSelector;
     @FXML private ColorPicker backgroundColorPicker;
+    @FXML private ComboBox<Settings.OriginMode> originModeSelector;
     @FXML private TextField searchField;
     @FXML private Slider zoomSlider;
     @FXML private TextField zoomField;
     @FXML private ComboBox<String> animSelector;
     @FXML private CheckBox autoPlayCheck;
+    @FXML private Slider animFrameSlider;
+    @FXML private Label animFrameLabel;
     @FXML private Slider fpsSlider;
     @FXML private TextField fpsField;
     @FXML private CheckBox alwaysOnTopCheck;
@@ -85,6 +95,11 @@ public class MainViewController {
     private SpmEntry currentlyLoadingSpm = null;
     private long loadGen = 0;
 
+    private final ImageRepository imageRepository = new ImageRepository();
+    private List<AnimationFrame> currentAnimationFrames = Collections.emptyList();
+    private int currentAnimationIndex = -1;
+    private boolean updatingFrameSlider = false;
+
     @FXML
     public void initialize() {
         setupCanvas();
@@ -111,12 +126,15 @@ public class MainViewController {
                 lblVersion, lblPages, lblImages, lblAnims,
                 chipTable, hitTable
         );
+        imageRepository.setExtraSearchRoots(Settings.getImageSearchRoots());
     }
 
     private void setupUIComponents() {
         setupParsingModeSelector();
         setupDisplayOptionListeners();
         setupBackgroundControls();
+        setupOriginControls();
+        setupAnimationControls();
         setupSpmListCellFactory();
         setupActionListeners();
         setupCanvasInteractions();
@@ -153,6 +171,41 @@ public class MainViewController {
         });
     }
 
+    private void setupOriginControls() {
+        originModeSelector.getItems().setAll(Settings.OriginMode.values());
+        originModeSelector.setValue(Settings.getOriginMode());
+        originModeSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                Settings.setOriginMode(newVal);
+                renderCurrentPage();
+            }
+        });
+    }
+
+    private void setupAnimationControls() {
+        animFrameSlider.setMin(0);
+        animFrameSlider.setMax(0);
+        animFrameSlider.setValue(0);
+        animFrameSlider.setDisable(true);
+        animFrameLabel.setText("0/0");
+        animFrameSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (updatingFrameSlider) {
+                return;
+            }
+            if (currentAnimationFrames.isEmpty()) {
+                return;
+            }
+            int target = (int) Math.round(newVal.doubleValue());
+            if (target < 0 || target >= currentAnimationFrames.size()) {
+                return;
+            }
+            if (target == currentAnimationIndex) {
+                return;
+            }
+            onStop();
+            displayAnimationFrame(target, false);
+        });
+    }
     private void setupBackgroundControls() {
         backgroundModeSelector.getItems().setAll(Settings.BackgroundMode.values());
         backgroundModeSelector.setValue(Settings.getBackgroundMode());
@@ -243,12 +296,17 @@ public class MainViewController {
         });
 
         animSelector.setOnAction(e -> {
-            if (animSelector.getValue() != null) {
-                if (autoPlayCheck.isSelected()) {
-                    onPlay();
-                } else {
-                    onStop();
-                }
+            if (animSelector.getValue() == null) {
+                return;
+            }
+            if (!prepareAnimationFrames(true)) {
+                onStop();
+                return;
+            }
+            if (autoPlayCheck.isSelected()) {
+                onPlay();
+            } else {
+                onStop();
             }
         });
         alwaysOnTopCheck.selectedProperty().addListener((obs, oldVal, newVal) -> ((Stage) canvasHolder.getScene().getWindow()).setAlwaysOnTop(newVal));
@@ -375,11 +433,11 @@ public class MainViewController {
     }
 
     private void loadAndDisplaySpm(SpmEntry entry) {
-        final long myGen = ++loadGen; // 本次加载的世代号
+        final long myGen = ++loadGen; // 鏈鍔犺浇鐨勪笘浠ｅ彿
 
-        onStop(); // 停止任何正在播放的动画
+        onStop(); // 鍋滄浠讳綍姝ｅ湪鎾斁鐨勫姩鐢?
 
-        // 非法/未成功的条目：直接清空并退出
+        // 闈炴硶/鏈垚鍔熺殑鏉＄洰锛氱洿鎺ユ竻绌哄苟閫€鍑?
         if (entry == null || entry.getStatus() != SpmEntry.Status.SUCCESS) {
             currentlyLoadingSpm = null;
             uiStateController.clearAllPanels();
@@ -391,7 +449,7 @@ public class MainViewController {
 
         currentlyLoadingSpm = entry;
 
-        // UI：进入“加载中”状态
+        // UI锛氳繘鍏モ€滃姞杞戒腑鈥濈姸鎬?
         progressBar.progressProperty().unbind();
         statusLabel.setText("Loading " + entry.getPath().getFileName() + "...");
         progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
@@ -400,15 +458,15 @@ public class MainViewController {
         uiStateController.clearAllPanels();
         canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
 
-        // 后台任务：只做耗时的IO/解析，避免访问FX线程对象
+        // 鍚庡彴浠诲姟锛氬彧鍋氳€楁椂鐨処O/瑙ｆ瀽锛岄伩鍏嶈闂瓼X绾跨▼瀵硅薄
         Task<List<Image>> loadTask = new Task<>() {
             @Override protected List<Image> call() {
-                return canvasController.loadImages(entry.getSpm(), spmFileHandler.getCurrentDirectory());
+                return imageRepository.loadImages(entry.getSpm(), spmFileHandler.getCurrentDirectory());
             }
         };
 
         loadTask.setOnSucceeded(e -> {
-            // 如果在此期间又点了别的文件，这次结果作废
+            // 濡傛灉鍦ㄦ鏈熼棿鍙堢偣浜嗗埆鐨勬枃浠讹紝杩欐缁撴灉浣滃簾
             if (myGen != loadGen) {
                 log.debug("Discarded stale image load for {}", entry.getPath().getFileName());
                 return;
@@ -422,7 +480,7 @@ public class MainViewController {
                 uiStateController.updateTablesForPage(null);
                 canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
             }
-            // 确保UI更新后将ScrollPane滚动到中心
+            // 纭繚UI鏇存柊鍚庡皢ScrollPane婊氬姩鍒颁腑蹇?
             Platform.runLater(this::centerScrollPane);
 
             statusLabel.setText("Ready");
@@ -470,14 +528,17 @@ public class MainViewController {
     private void renderCurrentPage() {
         canvasController.renderPage(
                 showCoordsCheck.isSelected(),
+                showChipBoundsCheck.isSelected(),
                 showHitboxCheck.isSelected(),
+                showPageBoundsCheck.isSelected(),
                 Settings.getBackgroundMode(),
-                Settings.getBackgroundColor()
+                Settings.getBackgroundColor(),
+                Settings.getOriginMode()
         );
     }
 
     /**
-     * 将ScrollPane的滚动条设置到中心位置 (0.5, 0.5)。
+     * 灏哠crollPane鐨勬粴鍔ㄦ潯璁剧疆鍒颁腑蹇冧綅缃?(0.5, 0.5)銆?
      */
     private void centerScrollPane() {
         scrollPane.setHvalue(0.5);
@@ -554,31 +615,22 @@ public class MainViewController {
     }
 
     @FXML private void onPlay() {
-        SpmEntry selectedSpmEntry = spmListView.getSelectionModel().getSelectedItem();
-        if (selectedSpmEntry == null || selectedSpmEntry.getSpm() == null) return;
-        String displayName = animSelector.getValue();
-        if (displayName == null) return;
-        onStop();
-        try {
-            int animIndex = Integer.parseInt(displayName.substring(displayName.indexOf('[') + 1, displayName.indexOf(']')));
-            Spm.SPMAnimData anim = selectedSpmEntry.getSpm().getAnimData().get(animIndex);
-            List<KeyFrame> keyFrames = new ArrayList<>();
-            int totalDuration = 0;
-            int frameMillis = (int) (1000.0 / fpsSlider.getValue());
-            for (Spm.SPMPatData pat : Optional.ofNullable(anim.getPatData()).orElse(List.of())) {
-                int waitFrames = Math.max(1, Optional.ofNullable(pat.getWaitFrame()).orElse(1));
-                for (Integer pageNo : Optional.ofNullable(pat.getPageNo()).orElse(List.of())) {
-                    totalDuration += waitFrames * frameMillis;
-                    keyFrames.add(new KeyFrame(Duration.millis(totalDuration), e -> selectPage(pageNo)));
-                }
+        if (currentAnimationFrames.isEmpty()) {
+            if (!prepareAnimationFrames(true)) {
+                return;
             }
-            if (keyFrames.isEmpty()) return;
-            animTimeline = new Timeline(keyFrames.toArray(new KeyFrame[0]));
-            animTimeline.setCycleCount(Timeline.INDEFINITE);
-            animTimeline.play();
-        } catch (Exception e) {
-            log.error("Failed to parse/play animation: " + displayName);
+        } else if (currentAnimationIndex < 0 && !currentAnimationFrames.isEmpty()) {
+            displayAnimationFrame(0, false);
         }
+        startAnimationTimeline();
+    }
+
+    @FXML private void onStepPrev() {
+        stepAnimation(-1);
+    }
+
+    @FXML private void onStepNext() {
+        stepAnimation(1);
     }
 
     @FXML private void onStop() {
@@ -586,5 +638,137 @@ public class MainViewController {
             animTimeline.stop();
             animTimeline = null;
         }
+    }
+
+    private boolean prepareAnimationFrames(boolean displayFirstFrame) {
+        SpmEntry entry = spmListView.getSelectionModel().getSelectedItem();
+        if (entry == null || entry.getSpm() == null) {
+            currentAnimationFrames = Collections.emptyList();
+            currentAnimationIndex = -1;
+            updateFrameUi();
+            return false;
+        }
+        String displayName = animSelector.getValue();
+        if (displayName == null) {
+            currentAnimationFrames = Collections.emptyList();
+            currentAnimationIndex = -1;
+            updateFrameUi();
+            return false;
+        }
+        List<Spm.SPMAnimData> animList = Optional.ofNullable(entry.getSpm().getAnimData()).orElse(List.of());
+        int animIndex = parseAnimIndex(displayName);
+        if (animIndex < 0 || animIndex >= animList.size()) {
+            currentAnimationFrames = Collections.emptyList();
+            currentAnimationIndex = -1;
+            updateFrameUi();
+            return false;
+        }
+        int patCount = Optional.ofNullable(entry.getSpm().getPatPageNum()).orElse(0);
+        List<AnimationFrame> frames = AnimationPlanBuilder.build(animList.get(animIndex), patCount);
+        if (frames.isEmpty()) {
+            currentAnimationFrames = Collections.emptyList();
+            currentAnimationIndex = -1;
+            updateFrameUi();
+            return false;
+        }
+        currentAnimationFrames = frames;
+        currentAnimationIndex = -1;
+        animFrameSlider.setDisable(frames.size() <= 1);
+        animFrameSlider.setMax(Math.max(0, frames.size() - 1));
+        if (displayFirstFrame) {
+            displayAnimationFrame(0, false);
+        } else {
+            updateFrameUi();
+        }
+        return true;
+    }
+
+    private void startAnimationTimeline() {
+        onStop();
+        if (currentAnimationFrames.isEmpty()) {
+            return;
+        }
+        if (currentAnimationIndex < 0) {
+            displayAnimationFrame(0, false);
+        }
+        double fpsValue = Math.max(1.0, fpsSlider.getValue());
+        double baseMillis = 1000.0 / fpsValue;
+        List<KeyFrame> keyFrames = new ArrayList<>();
+        int cumulative = 0;
+        for (int i = 0; i < currentAnimationFrames.size(); i++) {
+            AnimationFrame frame = currentAnimationFrames.get(i);
+            int duration = (int) Math.round(frame.effectiveWaitFrames() * baseMillis);
+            if (duration <= 0) {
+                duration = (int) Math.round(baseMillis);
+            }
+            duration = Math.max(duration, 16);
+            cumulative += duration;
+            final int target = (i + 1) % currentAnimationFrames.size();
+            keyFrames.add(new KeyFrame(Duration.millis(cumulative), e -> displayAnimationFrame(target, true)));
+        }
+        animTimeline = new Timeline(keyFrames.toArray(new KeyFrame[0]));
+        animTimeline.setCycleCount(Timeline.INDEFINITE);
+        animTimeline.playFromStart();
+    }
+
+    private void displayAnimationFrame(int index, boolean fromTimeline) {
+        if (currentAnimationFrames.isEmpty()) {
+            return;
+        }
+        int size = currentAnimationFrames.size();
+        int normalized = ((index % size) + size) % size;
+        currentAnimationIndex = normalized;
+        AnimationFrame frame = currentAnimationFrames.get(normalized);
+        selectPage(frame.pageNo());
+        updateFrameUi();
+    }
+
+    private void updateFrameUi() {
+        if (currentAnimationFrames.isEmpty()) {
+            updatingFrameSlider = true;
+            animFrameSlider.setDisable(true);
+            animFrameSlider.setMax(0);
+            animFrameSlider.setValue(0);
+            updatingFrameSlider = false;
+            animFrameLabel.setText("0/0");
+            return;
+        }
+        int size = currentAnimationFrames.size();
+        updatingFrameSlider = true;
+        animFrameSlider.setDisable(size <= 1);
+        animFrameSlider.setMax(Math.max(0, size - 1));
+        animFrameSlider.setValue(currentAnimationIndex < 0 ? 0 : currentAnimationIndex);
+        updatingFrameSlider = false;
+        int displayIndex = currentAnimationIndex < 0 ? 0 : currentAnimationIndex + 1;
+        animFrameLabel.setText(displayIndex + "/" + size);
+    }
+
+    private void stepAnimation(int delta) {
+        if (currentAnimationFrames.isEmpty()) {
+            if (!prepareAnimationFrames(true)) {
+                return;
+            }
+        }
+        if (currentAnimationFrames.isEmpty()) {
+            return;
+        }
+        int size = currentAnimationFrames.size();
+        int current = currentAnimationIndex < 0 ? 0 : currentAnimationIndex;
+        int next = Math.floorMod(current + delta, size);
+        onStop();
+        displayAnimationFrame(next, false);
+    }
+
+    private int parseAnimIndex(String displayName) {
+        try {
+            int start = displayName.indexOf('[');
+            int end = displayName.indexOf(']');
+            if (start >= 0 && end > start) {
+                return Integer.parseInt(displayName.substring(start + 1, end));
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to parse animation index from {}", displayName, ex);
+        }
+        return -1;
     }
 }

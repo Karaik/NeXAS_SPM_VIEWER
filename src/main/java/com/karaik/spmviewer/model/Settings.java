@@ -3,6 +3,12 @@ package com.karaik.spmviewer.model;
 import javafx.scene.paint.Color;
 
 import java.nio.charset.Charset;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.prefs.Preferences;
 
 public class Settings {
@@ -15,6 +21,9 @@ public class Settings {
     private static final String BG_MODE_KEY = "backgroundMode";
     private static final String BG_COLOR_KEY = "backgroundColor";
     private static final String AUTO_PLAY_KEY = "autoPlayAnimations";
+    private static final String IMAGE_SEARCH_PATHS_KEY = "imageSearchPaths";
+    private static final String ORIGIN_MODE_KEY = "originMode";
+    private static final String ENV_IMAGE_PATHS = "SPM_IMAGE_PATHS";
     private static final String DEFAULT_CHARSET = "windows-31j";
 
     /**
@@ -39,11 +48,22 @@ public class Settings {
         SOLID_COLOR
     }
 
+    public enum OriginMode {
+        CENTER("Center"),
+        TOP_LEFT("Top-Left");
+
+        private final String displayName;
+        OriginMode(String displayName) { this.displayName = displayName; }
+        @Override public String toString() { return displayName; }
+    }
+
     private static String currentCharsetName = DEFAULT_CHARSET;
     private static ParsingMode currentParsingMode = ParsingMode.VER_2_00_BHE;
     private static BackgroundMode currentBackgroundMode = BackgroundMode.CHECKERBOARD;
     private static Color currentBackgroundColor = Color.rgb(30, 30, 30);
     private static boolean currentAutoPlayEnabled = true;
+    private static List<Path> currentImageSearchRoots = new ArrayList<>();
+    private static OriginMode currentOriginMode = OriginMode.CENTER;
 
     static {
         currentCharsetName = PREFS.get(CHARSET_KEY, DEFAULT_CHARSET);
@@ -71,6 +91,23 @@ public class Settings {
         }
 
         currentAutoPlayEnabled = PREFS.getBoolean(AUTO_PLAY_KEY, true);
+
+        currentImageSearchRoots = parseSearchPaths(PREFS.get(IMAGE_SEARCH_PATHS_KEY, ""));
+        String envPaths = System.getenv(ENV_IMAGE_PATHS);
+        if (envPaths != null && !envPaths.isBlank()) {
+            List<Path> merged = new ArrayList<>(new LinkedHashSet<>(currentImageSearchRoots));
+            merged.addAll(parseSearchPaths(envPaths));
+            currentImageSearchRoots = normalizePaths(merged);
+        } else {
+            currentImageSearchRoots = normalizePaths(currentImageSearchRoots);
+        }
+
+        String originName = PREFS.get(ORIGIN_MODE_KEY, OriginMode.CENTER.name());
+        try {
+            currentOriginMode = OriginMode.valueOf(originName);
+        } catch (IllegalArgumentException e) {
+            currentOriginMode = OriginMode.CENTER;
+        }
     }
 
     public static String getCharsetName() { return currentCharsetName; }
@@ -124,11 +161,80 @@ public class Settings {
         }
     }
 
+    public static List<Path> getImageSearchRoots() {
+        return currentImageSearchRoots;
+    }
+
+    public static void setImageSearchRoots(List<Path> roots) {
+        currentImageSearchRoots = normalizePaths(roots);
+        PREFS.put(IMAGE_SEARCH_PATHS_KEY, formatSearchPaths(currentImageSearchRoots));
+    }
+
+    public static void addImageSearchRoot(Path root) {
+        if (root == null) {
+            return;
+        }
+        List<Path> merged = new ArrayList<>(currentImageSearchRoots);
+        merged.add(root);
+        setImageSearchRoots(merged);
+    }
+
+    public static OriginMode getOriginMode() {
+        return currentOriginMode;
+    }
+
+    public static void setOriginMode(OriginMode mode) {
+        if (mode != null) {
+            currentOriginMode = mode;
+            PREFS.put(ORIGIN_MODE_KEY, mode.name());
+        }
+    }
+
     public static boolean isAutoPlayEnabled() {
         return currentAutoPlayEnabled;
     }
 
-    public static void setAutoPlayEnabled(boolean enabled) {
+    private static List<Path> parseSearchPaths(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new ArrayList<>();
+        }
+        String[] parts = raw.split("[;\n]+");
+        List<Path> result = new ArrayList<>();
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                result.add(Paths.get(trimmed));
+            }
+        }
+        return result;
+    }
+
+    private static List<Path> normalizePaths(List<Path> paths) {
+        if (paths == null || paths.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<Path> unique = new LinkedHashSet<>();
+        for (Path path : paths) {
+            if (path != null) {
+                unique.add(path.toAbsolutePath().normalize());
+            }
+        }
+        return Collections.unmodifiableList(new ArrayList<>(unique));
+    }
+
+    private static String formatSearchPaths(List<Path> paths) {
+        if (paths == null || paths.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (Path path : paths) {
+            if (builder.length() > 0) {
+                builder.append(';');
+            }
+            builder.append(path);
+        }
+        return builder.toString();
+    }    public static void setAutoPlayEnabled(boolean enabled) {
         currentAutoPlayEnabled = enabled;
         PREFS.putBoolean(AUTO_PLAY_KEY, enabled);
     }

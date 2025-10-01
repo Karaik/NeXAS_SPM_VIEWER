@@ -1,4 +1,4 @@
-﻿package com.karaik.spmviewer.controller;
+package com.karaik.spmviewer.controller;
 
 import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.spm.Spm;
@@ -21,6 +21,7 @@ import java.awt.image.BufferedImage;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -66,8 +67,9 @@ class CanvasControllerTest {
     }
 
     @Test
-    void loadImagesPreservesIndexOrdering() throws Exception {
-        CanvasController controller = runOnFxThread(() -> new CanvasController(new Canvas(), new Group(), new Scale())) ;
+    void loadImagesPreservesIndexOrderingAndCaching() throws Exception {
+        ImageRepository repository = new ImageRepository();
+        CanvasController controller = runOnFxThread(() -> new CanvasController(new Canvas(), new Group(), new Scale()));
 
         Path tempDir = Files.createTempDirectory("canvas-controller-test");
         try {
@@ -82,10 +84,13 @@ class CanvasControllerTest {
             imageB.setImageName("missing.png");
             spm.setImageData(List.of(imageA, imageB));
 
-            List<Image> loaded = controller.loadImages(spm, tempDir);
+            List<Image> loaded = repository.loadImages(spm, tempDir);
             assertEquals(2, loaded.size(), "Should produce placeholder entries for each declared image");
             assertNotNull(loaded.get(0), "Existing asset should be loaded");
             assertNull(loaded.get(1), "Missing asset should map to null placeholder");
+
+            List<Image> cached = repository.loadImages(spm, tempDir);
+            assertSame(loaded.get(0), cached.get(0), "Loaded image should reuse cache");
         } finally {
             Files.walk(tempDir)
                     .sorted(Comparator.reverseOrder())
@@ -136,14 +141,34 @@ class CanvasControllerTest {
     }
 
     @Test
+    void pageExtentsRespectChipBounds() throws Exception {
+        CanvasController controller = runOnFxThread(() -> new CanvasController(new Canvas(), new Group(), new Scale()));
+        Spm spm = new Spm();
+        Spm.SPMPageData page = new Spm.SPMPageData();
+        page.setPageRect(rect(-32, -16, 96, 48));
+        Spm.SPMChipData chip = new Spm.SPMChipData();
+        chip.setDstRect(rect(10, 20, 70, 90));
+        page.setChipData(List.of(chip));
+        spm.setPageData(List.of(page));
+
+        runOnFxThread(() -> controller.setCurrentSpm(spm, List.of()));
+        runOnFxThread(() -> controller.setCurrentPageIndex(0));
+
+        CanvasController.PageExtents extents = controller.getCurrentPageExtents();
+        assertNotNull(extents, "Extents should be available after selecting a page");
+        assertTrue(extents.getWidth() >= 128, "Extents width should include page rect and chip span");
+        assertTrue(extents.getHeight() >= 64, "Extents height should include page rect and chip span");
+    }
+
+    @Test
     void wrapLineSplitsLongMessagesWithinBounds() throws Exception {
         WrapCheck check = runOnFxThread(() -> {
             CanvasController controller = new CanvasController(new Canvas(), new Group(), new Scale());
             Method wrapLine = CanvasController.class.getDeclaredMethod("wrapLine", String.class, Font.class, double.class);
             wrapLine.setAccessible(true);
             Font font = Font.font("System", FontWeight.BOLD, 28);
-            String text = "缺失资源提示需要根据画布宽度自动换行，防止文字被裁切" +
-                    "，因此需要验证换行逻辑能在有限宽度内正确拆分";
+            String text = "ȱʧ��Դ��ʾ��Ҫ���ݻ��������Զ����У���ֹ���ֱ�����" +
+                    "�������Ҫ��֤�����߼��������޿�������ȷ���";
             @SuppressWarnings("unchecked")
             List<String> lines = (List<String>) wrapLine.invoke(controller, text, font, 150.0);
             Text measure = new Text();
@@ -159,8 +184,8 @@ class CanvasControllerTest {
             return new WrapCheck(lines.size(), within);
         });
 
-        assertTrue(check.lineCount() > 1, "长文本应被拆成多行");
-        assertTrue(check.withinBounds(), "每行宽度必须受限于最大值");
+        assertTrue(check.lineCount() > 1, "���ı�Ӧ����ɶ���");
+        assertTrue(check.withinBounds(), "ÿ�п��ȱ������������ֵ");
     }
 
     @Test
@@ -170,7 +195,7 @@ class CanvasControllerTest {
             controller.getCanvas().setWidth(800);
             controller.getCanvas().setHeight(600);
             controller.previewImage(42,
-                    "未找到的资源文件名称非常非常长，需要在画布中心完整展示",
+                    "δ�ҵ�����Դ�ļ����Ʒǳ��ǳ�������Ҫ�ڻ�����������չʾ",
                     Settings.BackgroundMode.SOLID_COLOR,
                     Color.rgb(240, 240, 240));
 
@@ -198,14 +223,21 @@ class CanvasControllerTest {
             return new BannerMetrics(controller.getCanvas().getWidth(), bannerWidth, hasBanner);
         });
 
-        assertTrue(metrics.hasBanner(), "缺图提示应绘制在画布上");
+        assertTrue(metrics.hasBanner(), "ȱͼ��ʾӦ�����ڻ�����");
         assertTrue(metrics.bannerWidth() <= metrics.canvasWidth() * 0.8 + 2,
-                "提示框宽度应限制在画布80%以内");
+                "��ʾ�����Ӧ�����ڻ���80%����");
+    }
+
+    private Spm.SPMRect rect(int left, int top, int right, int bottom) {
+        Spm.SPMRect rect = new Spm.SPMRect();
+        rect.setLeft(left);
+        rect.setTop(top);
+        rect.setRight(right);
+        rect.setBottom(bottom);
+        return rect;
     }
 
     private record WrapCheck(int lineCount, boolean withinBounds) {}
 
     private record BannerMetrics(double canvasWidth, double bannerWidth, boolean hasBanner) {}
 }
-
-

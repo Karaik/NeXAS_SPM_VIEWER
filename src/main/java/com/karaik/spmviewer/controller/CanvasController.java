@@ -15,9 +15,6 @@ import javafx.scene.text.Text;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -40,6 +37,7 @@ public class CanvasController {
     private int currentPageIndex = -1;
     private double preferredContentWidth = MIN_CONTENT_SIZE;
     private double preferredContentHeight = MIN_CONTENT_SIZE;
+    private PageExtents currentPageExtents = PageExtents.empty();
 
     public CanvasController(Canvas canvas, Group canvasGroup, Scale scale) {
         this.canvas = canvas;
@@ -55,32 +53,27 @@ public class CanvasController {
         if (images != null) {
             loadedImages.addAll(images);
         }
+        currentPageExtents = PageExtents.empty();
         recomputePreferredContentSize(spm);
         resizeCanvas(preferredContentWidth, preferredContentHeight);
     }
 
     public void setCurrentPageIndex(int currentPageIndex) {
         this.currentPageIndex = currentPageIndex;
-        adjustCanvasForPage(currentSpm, currentPageIndex);
+        updatePageExtentsAndCanvas();
     }
 
-    public List<Image> loadImages(Spm spm, Path dir) {
-        List<Image> images = new ArrayList<>();
-        if (spm == null || spm.getImageData() == null) {
-            return images;
-        }
-        for (Spm.SPMImageData imageData : spm.getImageData()) {
-            images.add(loadImage(dir, imageData.getImageName()));
-        }
-        return images;
-    }
-
-    public void renderPage(boolean showCoords, boolean showHitboxes, Settings.BackgroundMode bgMode, Color bgColor) {
-        if (currentSpm == null || currentPageIndex < 0 || currentSpm.getPageData() == null || currentPageIndex >= currentSpm.getPageData().size()) {
+    public void renderPage(boolean showCoords, boolean showChipBounds, boolean showHitboxes,
+                           boolean showPageBounds, Settings.BackgroundMode bgMode, Color bgColor,
+                           Settings.OriginMode originMode) {
+        if (currentSpm == null || currentPageIndex < 0 || currentSpm.getPageData() == null
+                || currentPageIndex >= currentSpm.getPageData().size()) {
             clearCanvas(bgMode, bgColor);
             return;
         }
-        renderer.render(canvas, currentSpm, currentPageIndex, loadedImages, showCoords, showHitboxes, bgMode, bgColor);
+        renderer.render(canvas, currentSpm, currentPageIndex, loadedImages,
+                showCoords, showChipBounds, showHitboxes, showPageBounds,
+                bgMode, bgColor, originMode, currentPageExtents);
     }
 
     public void previewImage(int imageIndex, String imageName, Settings.BackgroundMode bgMode, Color bgColor) {
@@ -106,9 +99,28 @@ public class CanvasController {
             resizeCanvas(MIN_CONTENT_SIZE, MIN_CONTENT_SIZE);
         } else if (currentPageIndex < 0) {
             resizeCanvas(preferredContentWidth, preferredContentHeight);
+        } else {
+            updatePageExtentsAndCanvas();
         }
         GraphicsContext g = canvas.getGraphicsContext2D();
         renderer.drawBackground(g, canvas.getWidth(), canvas.getHeight(), bgMode, bgColor);
+    }
+
+    public PageExtents getCurrentPageExtents() {
+        return currentPageExtents;
+    }
+
+    private void updatePageExtentsAndCanvas() {
+        if (currentSpm == null || currentSpm.getPageData() == null
+                || currentPageIndex < 0 || currentPageIndex >= currentSpm.getPageData().size()) {
+            currentPageExtents = PageExtents.empty();
+            return;
+        }
+        PageExtents extents = computePageExtents(currentSpm.getPageData().get(currentPageIndex));
+        currentPageExtents = extents;
+        double width = Math.max(preferredContentWidth, extents.getWidth());
+        double height = Math.max(preferredContentHeight, extents.getHeight());
+        resizeCanvas(width, height);
     }
 
     private void recomputePreferredContentSize(Spm spm) {
@@ -118,26 +130,9 @@ public class CanvasController {
             return;
         }
         for (Spm.SPMPageData page : Optional.ofNullable(spm.getPageData()).orElse(List.of())) {
-            double[] size = computePageExtents(page);
-            preferredContentWidth = Math.max(preferredContentWidth, size[0]);
-            preferredContentHeight = Math.max(preferredContentHeight, size[1]);
-        }
-    }
-
-    private Image loadImage(Path dir, String name) {
-        if (dir == null || name == null || name.isBlank()) {
-            return null;
-        }
-        Path path = dir.resolve(name);
-        if (!Files.exists(path)) {
-            log.debug("Image asset {} not found under {}", name, dir);
-            return null;
-        }
-        try (InputStream input = Files.newInputStream(path)) {
-            return new Image(input);
-        } catch (Exception ex) {
-            log.warn("Failed to load image {}", path.getFileName(), ex);
-            return null;
+            PageExtents extents = computePageExtents(page);
+            preferredContentWidth = Math.max(preferredContentWidth, extents.getWidth());
+            preferredContentHeight = Math.max(preferredContentHeight, extents.getHeight());
         }
     }
 
@@ -147,16 +142,6 @@ public class CanvasController {
             return;
         }
         resizeCanvas(Math.max(image.getWidth(), MIN_CONTENT_SIZE), Math.max(image.getHeight(), MIN_CONTENT_SIZE));
-    }
-
-    private void adjustCanvasForPage(Spm spm, int pageIndex) {
-        if (spm == null || pageIndex < 0 || spm.getPageData() == null || pageIndex >= spm.getPageData().size()) {
-            return;
-        }
-        double[] size = computePageExtents(spm.getPageData().get(pageIndex));
-        double contentWidth = Math.max(preferredContentWidth, size[0]);
-        double contentHeight = Math.max(preferredContentHeight, size[1]);
-        resizeCanvas(contentWidth, contentHeight);
     }
 
     private void resizeCanvas(double contentWidth, double contentHeight) {
@@ -170,7 +155,7 @@ public class CanvasController {
         }
     }
 
-    private double[] computePageExtents(Spm.SPMPageData page) {
+    private PageExtents computePageExtents(Spm.SPMPageData page) {
         double originX = safe(page.getRotateCenterX());
         double originY = safe(page.getRotateCenterY());
         double minX = originX;
@@ -214,17 +199,17 @@ public class CanvasController {
 
         double width = Math.max(MIN_CONTENT_SIZE, maxX - minX);
         double height = Math.max(MIN_CONTENT_SIZE, maxY - minY);
-        return new double[]{width, height};
-    }
-
-    private void drawMissingImageMessage(GraphicsContext g, String imageName) {
-        drawMissingImageMessage(g, imageName, (String[]) null);
+        return new PageExtents(minX, minY, maxX, maxY, width, height);
     }
 
     private void drawMissingImageMessage(GraphicsContext g, String imageName, String... extraLines) {
+        String message = "Image not found" + (imageName == null || imageName.isBlank() ? "" : ": " + imageName);
+        Font font = Font.font("System", FontWeight.BOLD, 28);
+        Text textNode = new Text(message);
+        textNode.setFont(font);
+
         double padding = 24;
         double maxBoxWidth = Math.max(canvas.getWidth() * MESSAGE_MAX_WIDTH_RATIO, MIN_CANVAS_SIZE);
-        Font font = Font.font("System", FontWeight.BOLD, 28);
 
         List<String> lines = new ArrayList<>();
         String base = "Image not found";
@@ -348,6 +333,15 @@ public class CanvasController {
 
     private static double safe(Integer value) {
         return value == null ? 0.0 : value.doubleValue();
+    }
+
+    public record PageExtents(double minX, double minY, double maxX, double maxY, double width, double height) {
+        public static PageExtents empty() {
+            double minSize = CanvasController.MIN_CONTENT_SIZE;
+            return new PageExtents(0, 0, 0, 0, minSize, minSize);
+        }
+        public double getWidth() { return width; }
+        public double getHeight() { return height; }
     }
 }
 

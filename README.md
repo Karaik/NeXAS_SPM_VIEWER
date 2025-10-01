@@ -1,4 +1,4 @@
-﻿# NeXAS .spm Viewer / Reverse Tool
+# NeXAS .spm Viewer / Reverse Tool
 
 > 读取与分析 NeXAS 引擎的 `.spm` sprite 资源：动作组、动画与图像信息的可视化与调试。
 
