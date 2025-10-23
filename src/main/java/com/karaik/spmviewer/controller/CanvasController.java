@@ -3,6 +3,7 @@ package com.karaik.spmviewer.controller;
 import com.karaik.spmviewer.controller.render.SpmRenderer;
 import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.spm.Spm;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Group;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -108,6 +109,84 @@ public class CanvasController {
 
     public PageExtents getCurrentPageExtents() {
         return currentPageExtents;
+    }
+
+    public Optional<Rectangle2D> getPageBoundsViewport(Settings.OriginMode originMode) {
+        if (currentSpm == null || currentPageIndex < 0
+                || currentSpm.getPageData() == null
+                || currentPageIndex >= currentSpm.getPageData().size()) {
+            return Optional.empty();
+        }
+        Spm.SPMPageData page = currentSpm.getPageData().get(currentPageIndex);
+        PageExtents extents = currentPageExtents == null ? PageExtents.empty() : currentPageExtents;
+        double canvasWidth = canvas.getWidth();
+        double canvasHeight = canvas.getHeight();
+
+        double translateX;
+        double translateY;
+        if (originMode == Settings.OriginMode.TOP_LEFT && extents != null) {
+            double contentWidth = Math.max(extents.getWidth(), 1.0);
+            double contentHeight = Math.max(extents.getHeight(), 1.0);
+            double anchorX = (canvasWidth - contentWidth) / 2.0;
+            double anchorY = (canvasHeight - contentHeight) / 2.0;
+            translateX = anchorX - extents.minX();
+            translateY = anchorY - extents.minY();
+        } else {
+            double worldOriginX = canvasWidth / 2.0;
+            double worldOriginY = canvasHeight / 2.0;
+            translateX = worldOriginX - safe(page.getRotateCenterX());
+            translateY = worldOriginY - safe(page.getRotateCenterY());
+        }
+
+        double left;
+        double top;
+        double width;
+        double height;
+
+        Spm.SPMRect rect = page.getPageRect();
+        if (rect != null) {
+            double rectLeft = safe(rect.getLeft());
+            double rectTop = safe(rect.getTop());
+            double rectRight = safe(rect.getRight());
+            double rectBottom = safe(rect.getBottom());
+            left = translateX + Math.min(rectLeft, rectRight);
+            top = translateY + Math.min(rectTop, rectBottom);
+            width = Math.abs(rectRight - rectLeft);
+            height = Math.abs(rectBottom - rectTop);
+        } else {
+            double pageWidth = safe(page.getPageWidth());
+            double pageHeight = safe(page.getPageHeight());
+            if (pageWidth > 0 && pageHeight > 0) {
+                double pivotX = safe(page.getRotateCenterX());
+                double pivotY = safe(page.getRotateCenterY());
+                left = translateX + pivotX - pageWidth / 2.0;
+                top = translateY + pivotY - pageHeight / 2.0;
+                width = pageWidth;
+                height = pageHeight;
+            } else if (extents != null) {
+                left = translateX + extents.minX();
+                top = translateY + extents.minY();
+                width = extents.getWidth();
+                height = extents.getHeight();
+            } else {
+                return Optional.empty();
+            }
+        }
+
+        if (width <= 0 || height <= 0) {
+            return Optional.empty();
+        }
+
+        double x = Math.max(0.0, left);
+        double y = Math.max(0.0, top);
+        double maxX = Math.min(canvasWidth, left + width);
+        double maxY = Math.min(canvasHeight, top + height);
+        double clippedWidth = maxX - x;
+        double clippedHeight = maxY - y;
+        if (clippedWidth <= 0 || clippedHeight <= 0) {
+            return Optional.empty();
+        }
+        return Optional.of(new Rectangle2D(x, y, clippedWidth, clippedHeight));
     }
 
     private void updatePageExtentsAndCanvas() {

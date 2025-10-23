@@ -47,7 +47,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import com.karaik.spmviewer.controller.AnimationPlanBuilder;
 import com.karaik.spmviewer.controller.AnimationPlanBuilder.AnimationFrame;
 
 @Slf4j
@@ -99,6 +98,8 @@ public class MainViewController {
     private List<AnimationFrame> currentAnimationFrames = Collections.emptyList();
     private int currentAnimationIndex = -1;
     private boolean updatingFrameSlider = false;
+    private boolean animSelectionFromTree = false;
+    private TreeSelectionContext pendingTreeSelection;
 
     @FXML
     public void initialize() {
@@ -275,15 +276,31 @@ public class MainViewController {
         });
 
         animTree.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, item) -> {
-            if (item != null && item.isLeaf() && item.getValue().contains("pages=[")) {
-                try {
-                    String value = item.getValue();
-                    String pageStr = value.substring(value.indexOf('[') + 1, value.indexOf(']'));
-                    if (!pageStr.isEmpty()) {
-                        selectPage(Integer.parseInt(pageStr.split(",")[0].trim()));
-                        animSelector.getSelectionModel().select(item.getParent().getValue());
-                    }
-                } catch (Exception ignored) {}
+            if (item == null || !item.isLeaf()) {
+                return;
+            }
+            String value = item.getValue();
+            if (value == null || !value.contains("pages=[")) {
+                return;
+            }
+            TreeItem<String> parent = item.getParent();
+            if (parent == null) {
+                return;
+            }
+            String animDisplayName = parent.getValue();
+            int animIndex = parseAnimIndex(animDisplayName);
+            int patIndex = parsePatIndex(value);
+            List<Integer> pageNos = parsePageNumbers(value);
+            if (animIndex < 0 || patIndex < 0 || pageNos.isEmpty()) {
+                return;
+            }
+            pendingTreeSelection = new TreeSelectionContext(animIndex, patIndex, pageNos);
+            animSelectionFromTree = true;
+            boolean alreadySelected = animDisplayName.equals(animSelector.getValue());
+            if (!alreadySelected) {
+                animSelector.getSelectionModel().select(animDisplayName);
+            } else {
+                handleTreeSelectionAfterAnimUpdate();
             }
         });
 
@@ -297,17 +314,28 @@ public class MainViewController {
 
         animSelector.setOnAction(e -> {
             if (animSelector.getValue() == null) {
+                pendingTreeSelection = null;
+                animSelectionFromTree = false;
                 return;
             }
-            if (!prepareAnimationFrames(true)) {
+            boolean triggeredByTree = animSelectionFromTree;
+            boolean displayFirstFrame = !triggeredByTree;
+            if (!prepareAnimationFrames(displayFirstFrame)) {
+                if (triggeredByTree) {
+                    handleTreeSelectionAfterAnimUpdate();
+                }
                 onStop();
                 return;
+            }
+            if (triggeredByTree) {
+                handleTreeSelectionAfterAnimUpdate();
             }
             if (autoPlayCheck.isSelected()) {
                 onPlay();
             } else {
                 onStop();
             }
+            animSelectionFromTree = false;
         });
         alwaysOnTopCheck.selectedProperty().addListener((obs, oldVal, newVal) -> ((Stage) canvasHolder.getScene().getWindow()).setAlwaysOnTop(newVal));
         canvasHolder.sceneProperty().addListener((obs, oldScene, newScene) -> { if (newScene != null) setupKeyboardShortcuts(newScene); });
@@ -433,11 +461,14 @@ public class MainViewController {
     }
 
     private void loadAndDisplaySpm(SpmEntry entry) {
-        final long myGen = ++loadGen; // 鏈鍔犺浇鐨勪笘浠ｅ彿
 
-        onStop(); // 鍋滄浠讳綍姝ｅ湪鎾斁鐨勫姩鐢?
+        // 本次加载的世代号
+        final long myGen = ++loadGen;
 
-        // 闈炴硶/鏈垚鍔熺殑鏉＄洰锛氱洿鎺ユ竻绌哄苟閫€鍑?
+        // 停止任何正在播放的动画
+        onStop();
+
+        // 非法/未成功的条目：直接清空并退出
         if (entry == null || entry.getStatus() != SpmEntry.Status.SUCCESS) {
             currentlyLoadingSpm = null;
             uiStateController.clearAllPanels();
@@ -449,7 +480,7 @@ public class MainViewController {
 
         currentlyLoadingSpm = entry;
 
-        // UI锛氳繘鍏モ€滃姞杞戒腑鈥濈姸鎬?
+        // UI：进入“加载中”状态
         progressBar.progressProperty().unbind();
         statusLabel.setText("Loading " + entry.getPath().getFileName() + "...");
         progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
@@ -458,7 +489,7 @@ public class MainViewController {
         uiStateController.clearAllPanels();
         canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
 
-        // 鍚庡彴浠诲姟锛氬彧鍋氳€楁椂鐨処O/瑙ｆ瀽锛岄伩鍏嶈闂瓼X绾跨▼瀵硅薄
+        // 后台任务：只做耗时的IO/解析，避免访问FX线程对象
         Task<List<Image>> loadTask = new Task<>() {
             @Override protected List<Image> call() {
                 return imageRepository.loadImages(entry.getSpm(), spmFileHandler.getCurrentDirectory());
@@ -466,7 +497,7 @@ public class MainViewController {
         };
 
         loadTask.setOnSucceeded(e -> {
-            // 濡傛灉鍦ㄦ鏈熼棿鍙堢偣浜嗗埆鐨勬枃浠讹紝杩欐缁撴灉浣滃簾
+            // 如果在此期间又点了别的文件，这次结果作废
             if (myGen != loadGen) {
                 log.debug("Discarded stale image load for {}", entry.getPath().getFileName());
                 return;
@@ -480,7 +511,7 @@ public class MainViewController {
                 uiStateController.updateTablesForPage(null);
                 canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
             }
-            // 纭繚UI鏇存柊鍚庡皢ScrollPane婊氬姩鍒颁腑蹇?
+            // 确保UI更新后将ScrollPane滚动到中心
             Platform.runLater(this::centerScrollPane);
 
             statusLabel.setText("Ready");
@@ -538,7 +569,7 @@ public class MainViewController {
     }
 
     /**
-     * 灏哠crollPane鐨勬粴鍔ㄦ潯璁剧疆鍒颁腑蹇冧綅缃?(0.5, 0.5)銆?
+     * 将ScrollPane的滚动条设置到中心位置 (0.5, 0.5)。
      */
     private void centerScrollPane() {
         scrollPane.setHvalue(0.5);
@@ -554,17 +585,58 @@ public class MainViewController {
     }
 
     @FXML private void onExportPng() {
+        if (canvasController.getCurrentSpm() == null || canvasController.getCurrentPageIndex() < 0) {
+            new Alert(Alert.AlertType.WARNING, "No page selected to export.").showAndWait();
+            return;
+        }
         var fc = new FileChooser();
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG", "*.png"));
         fc.setInitialFileName("spm-export.png");
         File out = fc.showSaveDialog(canvasHolder.getScene().getWindow());
         if (out == null) return;
+
+        var prevMode  = Settings.getBackgroundMode();
+        var prevColor = Settings.getBackgroundColor();
+        boolean showCoords = showCoordsCheck.isSelected();
+        boolean showChipBounds = showChipBoundsCheck.isSelected();
+        boolean showHitboxes = showHitboxCheck.isSelected();
+        boolean showPageBounds = showPageBoundsCheck.isSelected();
+        Settings.OriginMode originMode = Settings.getOriginMode();
+
         try {
-            var snapshot = canvasController.getCanvas().snapshot(new SnapshotParameters(), null);
+            Settings.setBackgroundMode(Settings.BackgroundMode.SOLID_COLOR);
+            Settings.setBackgroundColor(Color.TRANSPARENT);
+
+            var canvas = canvasController.getCanvas();
+            var graphics = canvas.getGraphicsContext2D();
+            graphics.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
+
+            canvasController.renderPage(
+                    showCoords,
+                    showChipBounds,
+                    showHitboxes,
+                    false,
+                    Settings.BackgroundMode.SOLID_COLOR,
+                    Color.TRANSPARENT,
+                    originMode
+            );
+
+            SnapshotParameters sp = new SnapshotParameters();
+            sp.setFill(Color.TRANSPARENT);
+            if (showPageBounds) {
+                canvasController.getPageBoundsViewport(originMode).ifPresent(sp::setViewport);
+            }
+            WritableImage snapshot = canvas.snapshot(sp, null);
+
             writePng(snapshot, out.toPath());
+
             statusLabel.setText("Exported: " + out.getName());
         } catch (Exception ex) {
             new Alert(Alert.AlertType.ERROR, "Export failed: " + ex.getMessage()).showAndWait();
+        } finally {
+            Settings.setBackgroundMode(prevMode);
+            Settings.setBackgroundColor(prevColor);
+            renderCurrentPage();
         }
     }
 
@@ -759,6 +831,114 @@ public class MainViewController {
         displayAnimationFrame(next, false);
     }
 
+    private void handleTreeSelectionAfterAnimUpdate() {
+        if (pendingTreeSelection == null) {
+            animSelectionFromTree = false;
+            return;
+        }
+        TreeSelectionContext ctx = pendingTreeSelection;
+        pendingTreeSelection = null;
+        int frameIndex = findFrameIndexForTreeSelection(ctx);
+        if (frameIndex >= 0) {
+            displayAnimationFrame(frameIndex, false);
+        } else if (!ctx.pageNos().isEmpty()) {
+            selectPage(ctx.pageNos().get(0));
+        }
+        animSelectionFromTree = false;
+    }
+
+    private int findFrameIndexForTreeSelection(TreeSelectionContext ctx) {
+        SpmEntry entry = spmListView.getSelectionModel().getSelectedItem();
+        if (entry == null || entry.getSpm() == null) {
+            return -1;
+        }
+        List<Spm.SPMAnimData> animList = Optional.ofNullable(entry.getSpm().getAnimData()).orElse(List.of());
+        if (ctx.animIndex() < 0 || ctx.animIndex() >= animList.size()) {
+            return -1;
+        }
+        Spm.SPMAnimData anim = animList.get(ctx.animIndex());
+        List<Spm.SPMPatData> pats = Optional.ofNullable(anim.getPatData()).orElse(List.of());
+        if (ctx.patIndex() < 0 || ctx.patIndex() >= pats.size()) {
+            return -1;
+        }
+        int patPageLimit = Optional.ofNullable(entry.getSpm().getPatPageNum()).orElse(0);
+        int offset = 0;
+        for (int i = 0; i < pats.size(); i++) {
+            Spm.SPMPatData pat = pats.get(i);
+            List<Integer> pageNos = Optional.ofNullable(pat.getPageNo()).orElse(List.of());
+            if (pageNos.isEmpty()) {
+                continue;
+            }
+            int limit = patPageLimit > 0 ? Math.min(patPageLimit, pageNos.size()) : pageNos.size();
+            if (limit <= 0) {
+                continue;
+            }
+            if (i == ctx.patIndex()) {
+                int targetPage = ctx.pageNos().isEmpty() ? pageNos.get(0) : ctx.pageNos().get(0);
+                for (int j = 0; j < limit; j++) {
+                    Integer pageNo = pageNos.get(j);
+                    if (pageNo != null && pageNo.equals(targetPage)) {
+                        return offset + j;
+                    }
+                }
+                return offset;
+            }
+            offset += limit;
+        }
+        return -1;
+    }
+
+    private int parsePatIndex(String value) {
+        if (value == null) {
+            return -1;
+        }
+        try {
+            int start = value.indexOf("pat[");
+            if (start >= 0) {
+                int end = value.indexOf(']', start);
+                if (end > start) {
+                    return Integer.parseInt(value.substring(start + 4, end));
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to parse pat index from {}", value, ex);
+        }
+        return -1;
+    }
+
+    private List<Integer> parsePageNumbers(String value) {
+        if (value == null) {
+            return List.of();
+        }
+        int pagesIdx = value.indexOf("pages=[");
+        if (pagesIdx < 0) {
+            return List.of();
+        }
+        int start = value.indexOf('[', pagesIdx);
+        int end = value.indexOf(']', start);
+        if (start < 0 || end <= start) {
+            return List.of();
+        }
+        String inside = value.substring(start + 1, end).trim();
+        if (inside.isEmpty()) {
+            return List.of();
+        }
+        String[] tokens = inside.split(",");
+        List<Integer> result = new ArrayList<>(tokens.length);
+        for (String token : tokens) {
+            String trimmed = token.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            try {
+                result.add(Integer.parseInt(trimmed));
+            } catch (NumberFormatException ex) {
+                log.debug("Skipping non-numeric page token '{}' in {}", trimmed, value);
+            }
+        }
+        return result;
+    }
+
     private int parseAnimIndex(String displayName) {
         try {
             int start = displayName.indexOf('[');
@@ -771,4 +951,6 @@ public class MainViewController {
         }
         return -1;
     }
+
+    private record TreeSelectionContext(int animIndex, int patIndex, List<Integer> pageNos) { }
 }

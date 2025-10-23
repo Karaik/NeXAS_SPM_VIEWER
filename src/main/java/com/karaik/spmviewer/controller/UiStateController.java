@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Optional;
 
 public class UiStateController {
-    // ... 字段和构造函数不变 ...
 
     private final TreeView<String> pageTree;
     private final TreeView<String> animTree;

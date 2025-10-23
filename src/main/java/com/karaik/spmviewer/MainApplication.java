@@ -16,7 +16,7 @@ public class MainApplication extends Application {
         Locale.setDefault(Locale.ENGLISH);
 
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/MainView.fxml"));
-        Scene scene = new Scene(loader.load(), 920, 720);
+        Scene scene = new Scene(loader.load(), 1000, 720);
         URL url = getClass().getResource("/images/head.png");
         if (url != null) {
             stage.getIcons().add(new Image(url.toExternalForm()));
