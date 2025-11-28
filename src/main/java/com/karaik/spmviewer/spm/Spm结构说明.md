@@ -1,6 +1,6 @@
 ﻿# SPM 结构说明
 
-> 适用于 `com.karaik.spmviewer.spm.Spm` 模型，对应 BHE / BSDX / V202 三种方言的公共字段。
+> 现行模型按引擎+版本拆分（BHE v200/v202，BSDX v200/v202），解析结果统一落到 `com.karaik.spmviewer.spm.Spm` 的嵌套数据类，本文描述的是各方言的公共字段与含义。
 
 ## 顶层结构
 

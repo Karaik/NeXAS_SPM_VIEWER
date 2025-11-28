@@ -22,6 +22,8 @@ public class DefaultHitArea extends Spm.SPMHitArea {
     private Integer zMin;
     // 区域在页面坐标系中的最大 Z。
     private Integer zMax;
+    // 对齐旧版矩形使用时的显示矩形（可选）
+    private Spm.SPMRect fallbackRect;
 
     @Override
     public void readInfo(BinaryReader reader) throws Exception {
@@ -31,6 +33,12 @@ public class DefaultHitArea extends Spm.SPMHitArea {
         yMax = reader.readInt();
         zMin = reader.readInt();
         zMax = reader.readInt();
+        // 建一个便于渲染的备用矩形
+        fallbackRect = new Spm.SPMRect();
+        fallbackRect.setLeft(xMin);
+        fallbackRect.setRight(xMax);
+        fallbackRect.setTop(yMin);
+        fallbackRect.setBottom(yMax);
     }
 
     @Override

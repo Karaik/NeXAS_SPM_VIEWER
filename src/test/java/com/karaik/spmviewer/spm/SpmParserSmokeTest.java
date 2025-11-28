@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,33 +17,35 @@ class SpmParserSmokeTest {
     @Test
     void parseBheSampleWithHitboxAndAnimation() throws Exception {
         byte[] data = buildSampleSpm(true);
-        Spm spm = new SpmParser().parse(data, "sample_bhe.spm", StandardCharsets.UTF_8.name(), Settings.ParsingMode.VER_2_00_BHE);
+        Spm spm = new SpmParser().parse(data, "sample_bhe.spm", StandardCharsets.UTF_8.name(), Settings.ParsingMode.BHE);
 
         assertEquals("VER-2.00", spm.getSpmVersion());
         assertEquals(1, spm.getPageData().size());
         Spm.SPMPageData page = spm.getPageData().get(0);
-        assertEquals(1, page.getChipData().size());
-        assertEquals(1, page.getHitRects().size());
+        assertEquals(1, Optional.ofNullable(page.getChipData()).map(List::size).orElse(0));
+        assertEquals(1, Optional.ofNullable(page.getHitRects()).map(List::size).orElse(0));
         assertEquals(1, spm.getImageData().size());
         assertEquals("sheet.png", spm.getImageData().get(0).getImageName());
         assertEquals(1, spm.getAnimData().size());
-        Spm.SPMAnimData anim = spm.getAnimData().get(0);
+        var anim = spm.getAnimData().get(0);
         assertEquals("demo", anim.getAnimName());
-        assertEquals(1, anim.getPatData().size());
-        assertEquals(2, anim.getPatData().get(0).getWaitFrame());
-        assertEquals(List.of(0), anim.getPatData().get(0).getPageNo());
+        assertEquals(1, Optional.ofNullable(anim.getPatData()).map(List::size).orElse(0));
+        Spm.SPMPatData pat = Optional.ofNullable(anim.getPatData()).orElse(List.of()).get(0);
+        assertEquals(2, pat.getWaitFrame());
+        assertEquals(List.of(0), pat.getPageNo());
     }
 
     @Test
     void parseBsdxSampleWithoutHitbox() throws Exception {
         byte[] data = buildSampleSpm(false);
-        Spm spm = new SpmParser().parse(data, "sample_bsdx.spm", StandardCharsets.UTF_8.name(), Settings.ParsingMode.VER_2_00_BSDX);
+        Spm spm = new SpmParser().parse(data, "sample_bsdx.spm", StandardCharsets.UTF_8.name(), Settings.ParsingMode.BSDX);
 
         assertEquals("VER-2.00", spm.getSpmVersion());
         assertEquals(1, spm.getPageData().size());
         Spm.SPMPageData page = spm.getPageData().get(0);
-        assertEquals(1, page.getChipData().size());
-        assertTrue(page.getHitRects() == null || page.getHitRects().isEmpty());
+        assertEquals(1, Optional.ofNullable(page.getChipData()).map(List::size).orElse(0));
+        List<? extends Spm.SPMHitArea> hits = Optional.ofNullable(page.getHitRects()).orElse(List.of());
+        assertTrue(hits.isEmpty());
         assertEquals("sheet.png", spm.getImageData().get(0).getImageName());
         assertEquals(1, spm.getAnimData().size());
     }

@@ -28,15 +28,11 @@ public class Settings {
 
     /**
      * 定义SPM文件的解析模式（方言）。
-     * 每种模式对应一种特定的文件结构，尤其是在HitArea部分。
+     * 版本自动按文件头识别，只需选择引擎类型。
      */
     public enum ParsingMode {
-        // 方言A (多态版): SPM VER-2.00 (for bhe)
-        VER_2_00_BHE("SPM VER-2.00 (bhe)"),
-        // 方言C (旧版变种): SPM VER-2.00 (for bsdx)
-        VER_2_00_BSDX("SPM VER-2.00 (bsdx)"),
-        // 方言B (旧版标准): SPM VER-2.02
-        VER_2_02("SPM VER-2.02");
+        BHE("BHE (auto detect version)"),
+        BSDX("BSDX (auto detect version)");
 
         private final String displayName;
         ParsingMode(String displayName) { this.displayName = displayName; }
@@ -58,7 +54,7 @@ public class Settings {
     }
 
     private static String currentCharsetName = DEFAULT_CHARSET;
-    private static ParsingMode currentParsingMode = ParsingMode.VER_2_00_BHE;
+    private static ParsingMode currentParsingMode = ParsingMode.BHE;
     private static BackgroundMode currentBackgroundMode = BackgroundMode.CHECKERBOARD;
     private static Color currentBackgroundColor = Color.rgb(30, 30, 30);
     private static boolean currentAutoPlayEnabled = true;
@@ -68,11 +64,11 @@ public class Settings {
     static {
         currentCharsetName = PREFS.get(CHARSET_KEY, DEFAULT_CHARSET);
 
-        String modeName = PREFS.get(PARSING_MODE_KEY, ParsingMode.VER_2_00_BHE.name());
+        String modeName = PREFS.get(PARSING_MODE_KEY, ParsingMode.BHE.name());
         try {
             currentParsingMode = ParsingMode.valueOf(modeName);
         } catch (IllegalArgumentException e) {
-            currentParsingMode = ParsingMode.VER_2_00_BHE;
+            currentParsingMode = ParsingMode.BHE;
         }
 
         // Background settings

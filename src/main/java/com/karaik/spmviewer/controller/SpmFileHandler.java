@@ -2,6 +2,7 @@ package com.karaik.spmviewer.controller;
 
 import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.model.SpmEntry;
+import com.karaik.spmviewer.spm.Spm;
 import com.karaik.spmviewer.spm.parser.SpmParser;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
@@ -136,7 +137,8 @@ public class SpmFileHandler {
                     try {
                         byte[] data = Files.readAllBytes(spmPath);
                         // 将解析模式传递给解析器
-                        entry.setSpm(parser.parse(data, spmPath.getFileName().toString(), Settings.getCharsetName(), mode));
+                        Spm spm = parser.parse(data, spmPath.getFileName().toString(), Settings.getCharsetName(), mode);
+                        entry.setSpm(spm);
                         entry.setStatus(SpmEntry.Status.SUCCESS);
                     } catch (Exception ex) {
                         log.warn("Failed to parse SPM file: {}", spmPath, ex);

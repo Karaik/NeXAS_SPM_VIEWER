@@ -28,7 +28,7 @@ public class CanvasController {
     private static final double MAX_CANVAS_SIZE = 4096;
     private static final double CONTENT_PADDING = 64;
     private static final double MIN_CONTENT_SIZE = 16;
-    private static final double MESSAGE_MAX_WIDTH_RATIO = 0.8;
+    private static final double MESSAGE_MAX_WIDTH_RATIO = 0.7;
 
     private final Canvas canvas;
     private final SpmRenderer renderer = new SpmRenderer();
@@ -288,7 +288,7 @@ public class CanvasController {
         textNode.setFont(font);
 
         double padding = 24;
-        double maxBoxWidth = Math.max(canvas.getWidth() * MESSAGE_MAX_WIDTH_RATIO, MIN_CANVAS_SIZE);
+        double maxBoxWidth = Math.max(canvas.getWidth() * MESSAGE_MAX_WIDTH_RATIO, MIN_CONTENT_SIZE);
 
         List<String> lines = new ArrayList<>();
         String base = "Image not found";

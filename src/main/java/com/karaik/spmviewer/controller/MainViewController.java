@@ -27,6 +27,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import com.karaik.spmviewer.controller.UiStateController;
 
 import java.awt.image.BufferedImage;
 import javafx.util.Duration;

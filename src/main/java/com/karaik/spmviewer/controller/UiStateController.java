@@ -1,7 +1,13 @@
 package com.karaik.spmviewer.controller;
 
 import com.karaik.spmviewer.spm.Spm;
-import javafx.scene.control.*;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeView;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -13,7 +19,6 @@ public class UiStateController {
     private final ComboBox<String> animSelector;
     private final Label lblVersion, lblPages, lblImages, lblAnims;
     private final TableView<Spm.SPMChipData> chipTable;
-    // 表格的泛型改为 SPMHitArea 基类
     private final TableView<Spm.SPMHitArea> hitTable;
 
     public UiStateController(TreeView<String> pageTree, TreeView<String> animTree, ListView<String> imageList,
@@ -31,9 +36,7 @@ public class UiStateController {
         this.hitTable = hitTable;
     }
 
-    // MODIFIED: Signature changed to accept an animation filter
     public void updateUiForSpm(Spm spm, String animFilter) {
-        // Clear everything except image list and basic info if we are just filtering
         if (animFilter == null) {
             clearAllPanels();
         } else {
@@ -43,22 +46,18 @@ public class UiStateController {
 
         if (spm == null) return;
 
-        // Info Tab (only set if not just filtering)
         if (animFilter == null) {
             lblVersion.setText(spm.getSpmVersion());
             lblPages.setText(String.valueOf(safe(spm.getNumPageData())));
             lblImages.setText(String.valueOf(safe(spm.getNumImageData())));
             lblAnims.setText(String.valueOf(safe(spm.getNumAnimData())));
 
-            // Images List
-            if (spm.getImageData() != null) {
-                for (int i = 0; i < spm.getImageData().size(); i++) {
-                    String name = Optional.ofNullable(spm.getImageData().get(i).getImageName()).orElse("<image " + i + ">");
-                    imageList.getItems().add(i + ": " + name);
-                }
+            var images = Optional.ofNullable(spm.getImageData()).orElse(List.of());
+            for (int i = 0; i < images.size(); i++) {
+                String name = Optional.ofNullable(images.get(i).getImageName()).orElse("<image " + i + ">");
+                imageList.getItems().add(i + ": " + name);
             }
 
-            // Pages Tree
             var rootPages = new TreeItem<>("Pages");
             pageTree.setRoot(rootPages);
             rootPages.setExpanded(true);
@@ -72,25 +71,19 @@ public class UiStateController {
             }
         }
 
-        // Animations Tree and ComboBox (This part runs on every update/filter)
         var rootAnims = new TreeItem<>("Animations");
         animTree.setRoot(rootAnims);
         rootAnims.setExpanded(true);
         var anims = Optional.ofNullable(spm.getAnimData()).orElse(List.of());
 
-        // MODIFIED: Use indexed loop to get animation index and apply filtering
         for (int i = 0; i < anims.size(); i++) {
             var a = anims.get(i);
             String animName = Optional.ofNullable(a.getAnimName()).orElse("").trim();
-
-            // Filter logic
             if (animFilter != null && !animFilter.trim().isEmpty()) {
                 if (!animName.toLowerCase().contains(animFilter.trim().toLowerCase())) {
-                    continue; // Skip if it doesn't match the filter
+                    continue;
                 }
             }
-
-            // MODIFIED: Create a display name with an index
             String displayName = String.format("[%d] %s", i, animName).trim();
 
             var ai = new TreeItem<>(displayName);

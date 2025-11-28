@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Hitbox（碰撞区域）工厂。
- * 根据给定的形状类型ID，创建对应的 SPMHitArea 子类实例。
+ * 根据给定的形状类型ID，创建对应的 HitArea 实现。
  */
 @Slf4j
 public class HitboxFactory {
@@ -22,8 +22,7 @@ public class HitboxFactory {
             case 10 -> new CRotatableBox();
             case 11 -> new CSphere();
             default -> {
-                log.error("unknown Hitbox type: " + shapeType + "parse with original");
-                // 提供一个最基础的回退方案
+                log.error("unknown Hitbox type: " + shapeType + " parse with original");
                 yield new CRect();
             }
         };
