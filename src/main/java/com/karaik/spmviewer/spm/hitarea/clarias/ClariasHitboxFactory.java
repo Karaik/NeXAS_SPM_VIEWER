@@ -1,6 +1,7 @@
 package com.karaik.spmviewer.spm.hitarea.clarias;
 
 import com.karaik.spmviewer.spm.Spm;
+import com.karaik.spmviewer.spm.hitarea.clarias.c.*;
 import lombok.extern.slf4j.Slf4j;
 
 /**

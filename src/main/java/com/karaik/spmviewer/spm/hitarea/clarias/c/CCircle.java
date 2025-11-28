@@ -1,11 +1,11 @@
-package com.karaik.spmviewer.spm.hitarea.clarias;
+package com.karaik.spmviewer.spm.hitarea.clarias.c;
 
 import com.karaik.spmviewer.io.BinaryReader;
 
 /**
  * Clarias 命中体：同 BHE，对应 shapeType=2，但占位字节仅 4 个。
  */
-public class CCircle extends com.karaik.spmviewer.spm.hitarea.bhe.CCircle {
+public class CCircle extends com.karaik.spmviewer.spm.hitarea.bhe.c.CCircle {
 
     @Override
     public void readInfo(BinaryReader reader) throws Exception {

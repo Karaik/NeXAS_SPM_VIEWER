@@ -3,6 +3,7 @@ package com.karaik.spmviewer.spm.parser.version;
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
 import com.karaik.spmviewer.spm.hitarea.clarias.ClariasHitboxFactory;
+import com.karaik.spmviewer.spm.hitarea.clarias.c.CRect;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
@@ -115,7 +116,7 @@ public class ClariasV200Parser implements SpmDialectParser {
 
     protected Spm.SPMHitArea parseHit(BinaryReader reader) {
         if (reader.remaining() < 4) {
-            return new com.karaik.spmviewer.spm.hitarea.clarias.CRect();
+            return new CRect();
         }
         try {
             short id = reader.readShort();
@@ -127,7 +128,7 @@ public class ClariasV200Parser implements SpmDialectParser {
             return hit;
         } catch (Exception ex) {
             log.warn("Clarias hit parse failed: {}", ex.getMessage());
-            return new com.karaik.spmviewer.spm.hitarea.clarias.CRect();
+            return new CRect();
         }
     }
 

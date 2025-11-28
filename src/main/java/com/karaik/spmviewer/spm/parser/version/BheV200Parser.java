@@ -2,8 +2,8 @@ package com.karaik.spmviewer.spm.parser.version;
 
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
-import com.karaik.spmviewer.spm.hitarea.bhe.CRect;
-import com.karaik.spmviewer.spm.parser.HitboxFactory;
+import com.karaik.spmviewer.spm.hitarea.bhe.BheHitboxFactory;
+import com.karaik.spmviewer.spm.hitarea.bhe.c.CRect;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
@@ -74,7 +74,7 @@ public class BheV200Parser implements SpmDialectParser {
         try {
             short id = reader.readShort();
             short shapeType = reader.readShort();
-            Spm.SPMHitArea hitbox = HitboxFactory.createHitbox(shapeType);
+            Spm.SPMHitArea hitbox = BheHitboxFactory.createHitbox(shapeType);
             hitbox.setId(id);
             hitbox.setShapeType(shapeType);
             hitbox.readInfo(reader);

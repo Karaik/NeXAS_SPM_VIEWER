@@ -3,7 +3,7 @@
 本目录下的 `SPMHitArea` 子类用于把 SPM 文件中的碰撞区域数据映射成可视化对象。字段含义的确认基于：
 
 1. 对照 `src/main/resources/spmBheJson` 目录下解包得到的 JSON 样本；
-2. 结合 `com.karaik.spmviewer.spm.parser.HitboxFactory` 的 shapeType 映射与各解析器的读写顺序；
+2. 结合 `com.karaik.spmviewer.spm.hitarea.bhe.BheHitboxFactory` 的 shapeType 映射与各解析器的读写顺序；
 3. 对尚未在样本中出现的类型记录推断依据与当前统计结果。
 
 > **样本统计**：遍历 `spmBheJson` 共发现 shapeType=1 的记录 235,801 条、shapeType=10 的记录 5,002 条、缺省（无 shapeType 字段，对应旧版默认矩形）的记录 136 条，其余 shapeType 目前均为 0 条。

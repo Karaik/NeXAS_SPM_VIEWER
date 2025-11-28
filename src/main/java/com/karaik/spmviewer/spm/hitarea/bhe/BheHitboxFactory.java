@@ -1,7 +1,7 @@
-package com.karaik.spmviewer.spm.parser;
+package com.karaik.spmviewer.spm.hitarea.bhe;
 
 import com.karaik.spmviewer.spm.Spm;
-import com.karaik.spmviewer.spm.hitarea.bhe.*;
+import com.karaik.spmviewer.spm.hitarea.bhe.c.*;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
  * 根据给定的形状类型ID，创建对应的 HitArea 实现。
  */
 @Slf4j
-public class HitboxFactory {
+public class BheHitboxFactory {
 
     public static Spm.SPMHitArea createHitbox(short shapeType) {
         return switch (shapeType) {

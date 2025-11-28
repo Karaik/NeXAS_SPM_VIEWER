@@ -1,4 +1,4 @@
-package com.karaik.spmviewer.spm.hitarea.bhe;
+package com.karaik.spmviewer.spm.hitarea.bhe.c;
 
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
