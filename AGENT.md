@@ -12,7 +12,7 @@
 - `controller/`：主界面逻辑、文件加载、画布渲染、动画播放、状态面板填充。
 - `spm/Spm.java`：通用视图模型（嵌套 Page/Chip/HitArea/Anim 数据类）。
 - `spm/parser`：统一入口 `SpmParser`，方言 parser（Bhe/Bsdx v200/v202）、`SpmParserFactory`。
-- `spm/hitarea`：命中体绘制实现。
+- `spm/hitarea`：命中体绘制实现；Clarias 独立目录与 BHE 对照（见 `spm/hitarea/clarias/README.md`），BSDX 也有独立的 `spm/hitarea/bsdx/LegacyRectHitArea.java`。
 - `io/`：`BinaryReader`/`BinaryWriter`。
 - `model/Settings`：全局配置与持久化（包含解析模式、背景、原点、自动播放、图片搜索路径等）。
 - 资源：`src/main/resources/fxml` 界面、`images` 图标；`example` 目录提供 BHE/ BSDX 样例代码与结构参考；`spmBheJson` 为解包出的 JSON 样本。

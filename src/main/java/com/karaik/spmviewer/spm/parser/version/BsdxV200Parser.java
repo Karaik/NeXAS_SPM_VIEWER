@@ -2,7 +2,7 @@ package com.karaik.spmviewer.spm.parser.version;
 
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
-import com.karaik.spmviewer.spm.hitarea.bhe.LegacyRectHitArea;
+import com.karaik.spmviewer.spm.hitarea.bsdx.LegacyRectHitArea;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;

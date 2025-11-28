@@ -49,7 +49,7 @@ docs/
 - 模式：`BHE`、`BSDX`、`CLARIAS`（UI 下拉）；版本自动从文件头判断（含“2.02”走 v202，否则 v200）。
 - 入口：`spm/parser/SpmParser.java`；工厂 `SpmParserFactory` 根据引擎+版本返回方言解析器。
 - 方言解析器：`BheV200Parser`/`BheV202Parser`、`BsdxV200Parser`/`BsdxV202Parser`、`ClariasV200Parser`/`ClariasV202Parser`。
-- 命中体工厂：`spm/parser/HitboxFactory`（BHE/Clarias 多态）；BSDX 由解析器直接构造 `LegacyRectHitArea`。
+- 命中体工厂：`spm/parser/HitboxFactory`（BHE/Clarias 多态）；BSDX 由解析器直接构造 `LegacyRectHitArea`（已移动到 `spm/hitarea/bsdx/`，与其他方言隔离）。Clarias 的命中体实现与 BHE 独立维护（详见 `spm/hitarea/clarias/README.md`，其中 `CCircle` 的占位字节与 BHE 不同）。
 
 ## 已知问题与限制
 - 主要验证 Windows 平台运行。
@@ -58,8 +58,8 @@ docs/
 
 ## Roadmap
 - [ ] 增强 hitbox 编辑与导出能力
-- [ ] 支持更多 `.spm` 方言自动检测 / 新引擎增量接入
-- [ ] 引入搜索/过滤快捷面板
+- [x] 支持更多 `.spm` 方言自动检测 / 新引擎增量接入
+- [x] 引入搜索/过滤快捷面板
 - [ ] 增加跨平台打包脚本（macOS/Linux）
 
 ## 贡献指南
