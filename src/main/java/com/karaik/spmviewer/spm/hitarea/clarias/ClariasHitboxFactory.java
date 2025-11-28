@@ -1,15 +1,13 @@
-package com.karaik.spmviewer.spm.parser;
+package com.karaik.spmviewer.spm.hitarea.clarias;
 
 import com.karaik.spmviewer.spm.Spm;
-import com.karaik.spmviewer.spm.hitarea.bhe.*;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Hitbox（碰撞区域）工厂。
- * 根据给定的形状类型ID，创建对应的 HitArea 实现。
+ * Clarias 专用命中体工厂（与 BHE 映射一致，便于独立维护）。
  */
 @Slf4j
-public class HitboxFactory {
+public class ClariasHitboxFactory {
 
     public static Spm.SPMHitArea createHitbox(short shapeType) {
         return switch (shapeType) {
@@ -22,7 +20,7 @@ public class HitboxFactory {
             case 10 -> new CRotatableBox();
             case 11 -> new CSphere();
             default -> {
-                log.error("unknown Hitbox type: " + shapeType + " parse with original");
+                log.error("unknown Clarias Hitbox type: " + shapeType + " parse with fallback");
                 yield new CRect();
             }
         };

@@ -32,7 +32,8 @@ public class Settings {
      */
     public enum ParsingMode {
         BHE("BHE (auto detect version)"),
-        BSDX("BSDX (auto detect version)");
+        BSDX("BSDX (auto detect version)"),
+        CLARIAS("CLARIAS (auto detect version)");
 
         private final String displayName;
         ParsingMode(String displayName) { this.displayName = displayName; }

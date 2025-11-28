@@ -5,6 +5,8 @@ import com.karaik.spmviewer.spm.parser.version.BheV200Parser;
 import com.karaik.spmviewer.spm.parser.version.BheV202Parser;
 import com.karaik.spmviewer.spm.parser.version.BsdxV200Parser;
 import com.karaik.spmviewer.spm.parser.version.BsdxV202Parser;
+import com.karaik.spmviewer.spm.parser.version.ClariasV200Parser;
+import com.karaik.spmviewer.spm.parser.version.ClariasV202Parser;
 import com.karaik.spmviewer.spm.parser.version.SpmDialectParser;
 
 /**
@@ -18,6 +20,7 @@ public class SpmParserFactory {
         return switch (mode) {
             case BHE -> (is202 ? new BheV202Parser() : new BheV200Parser());
             case BSDX -> (is202 ? new BsdxV202Parser() : new BsdxV200Parser());
+            case CLARIAS -> (is202 ? new ClariasV202Parser() : new ClariasV200Parser());
         };
     }
 }

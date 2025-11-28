@@ -46,10 +46,10 @@ docs/
 更多细节参见 `src/main/java/com/karaik/spmviewer/spm` 与 `Spm结构说明.md`。
 
 ## 解析方言与入口
-- 模式：`BHE`、`BSDX`（UI 下拉）；版本自动从文件头判断（含“2.02”走 v202，否则 v200）。
+- 模式：`BHE`、`BSDX`、`CLARIAS`（UI 下拉）；版本自动从文件头判断（含“2.02”走 v202，否则 v200）。
 - 入口：`spm/parser/SpmParser.java`；工厂 `SpmParserFactory` 根据引擎+版本返回方言解析器。
-- 方言解析器：`BheV200Parser`/`BheV202Parser`、`BsdxV200Parser`/`BsdxV202Parser`。
-- 命中体工厂：`spm/parser/HitboxFactory`（BHE 多态）；BSDX 由解析器直接构造 `LegacyRectHitArea`。
+- 方言解析器：`BheV200Parser`/`BheV202Parser`、`BsdxV200Parser`/`BsdxV202Parser`、`ClariasV200Parser`/`ClariasV202Parser`。
+- 命中体工厂：`spm/parser/HitboxFactory`（BHE/Clarias 多态）；BSDX 由解析器直接构造 `LegacyRectHitArea`。
 
 ## 已知问题与限制
 - 主要验证 Windows 平台运行。

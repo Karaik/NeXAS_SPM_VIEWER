@@ -24,8 +24,8 @@
 - 运行 jar（需本地 JavaFX 依赖或使用 FULL 版）：`java -jar target/NeXAS_SPM_VIEWER-1.0-0-FULL.jar`
 
 ## 解析模式（现状）
-- `Settings.ParsingMode`：`BHE`、`BSDX`（版本自动识别 2.00/2.02）。
-- `SpmParserFactory` 根据引擎+版本返回方言 parser；`HitboxFactory` 按 `shapeType` 创建多态命中体（BHE），BSDX 使用 `LegacyRectHitArea`。
+- `Settings.ParsingMode`：`BHE`、`BSDX`、`CLARIAS`（版本自动识别 2.00/2.02）。
+- `SpmParserFactory` 根据引擎+版本返回方言 parser；`HitboxFactory` 按 `shapeType` 创建多态命中体（BHE/Clarias），BSDX 使用 `LegacyRectHitArea`。
 
 ## 重要依赖/假设
 - 字符集默认 `windows-31j`，可在设置对话框更改；`BinaryReader` 支持大小端切换。

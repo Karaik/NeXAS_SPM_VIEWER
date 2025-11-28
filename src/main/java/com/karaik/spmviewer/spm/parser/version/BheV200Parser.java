@@ -2,6 +2,7 @@ package com.karaik.spmviewer.spm.parser.version;
 
 import com.karaik.spmviewer.io.BinaryReader;
 import com.karaik.spmviewer.spm.Spm;
+import com.karaik.spmviewer.spm.hitarea.bhe.CRect;
 import com.karaik.spmviewer.spm.parser.HitboxFactory;
 import lombok.extern.slf4j.Slf4j;
 
@@ -80,7 +81,7 @@ public class BheV200Parser implements SpmDialectParser {
             return hitbox;
         } catch (Exception e) {
             log.error("Failed to parse BHE hitarea: {}", e.getMessage());
-            return new com.karaik.spmviewer.spm.hitarea.CRect();
+            return new CRect();
         }
     }
 
