@@ -25,9 +25,11 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
 import javafx.stage.Modality;
@@ -44,6 +46,8 @@ import java.awt.image.BufferedImage;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.*;
+import javafx.geometry.Insets;
+import java.io.FileWriter;
 
 /**
  * 简化版 Editor 骨架：加载 SPM + 图片，支持基本浏览与渲染。
@@ -201,7 +205,13 @@ public class EditorViewController {
                 var anims = Optional.ofNullable(spmEntry.getSpm().getAnimData()).orElse(List.of());
                 if (idx < anims.size()) {
                     var anim = anims.get(idx);
-                    statusLabel.setText("Anim #" + idx + " frames: " + Optional.ofNullable(anim.getPatData()).orElse(List.of()).size());
+                    List<Spm.SPMPatData> pats = Optional.ofNullable(anim.getPatData()).orElse(List.of());
+                    statusLabel.setText("Anim #" + idx + " frames: " + pats.size());
+                    Integer targetPage = firstPageFromAnim(anim);
+                    if (targetPage != null && targetPage >= 0 && targetPage < Optional.ofNullable(spmEntry.getSpm().getPageData()).orElse(List.of()).size()) {
+                        pageList.getSelectionModel().select(targetPage);
+                    }
+                    render();
                 }
             }
         });
@@ -213,7 +223,9 @@ public class EditorViewController {
         });
         chipList.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
-                onEditSprite();
+                if (confirmChipEditSelection()) {
+                    onEditSprite();
+                }
             }
         });
         hitList.getSelectionModel().selectedIndexProperty().addListener((obs, o, n) -> {
@@ -244,9 +256,23 @@ public class EditorViewController {
                 canvasHolder.requestFocus();
             }
         });
+        canvasHolder.addEventFilter(ScrollEvent.SCROLL, e -> {
+            if (e.isControlDown()) {
+                double delta = e.getDeltaY() > 0 ? 0.1 : -0.1;
+                double next = Math.max(zoomSlider.getMin(), Math.min(zoomSlider.getMax(), zoomSlider.getValue() + delta));
+                zoomSlider.setValue(next);
+                e.consume();
+            }
+        });
         canvasHolder.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == KeyCode.DIGIT1 && e.isControlDown()) {
                 zoomSlider.setValue(1.0);
+                e.consume();
+            } else if (e.getCode() == KeyCode.EQUALS || e.getCode() == KeyCode.PLUS) {
+                zoomSlider.setValue(Math.min(zoomSlider.getMax(), zoomSlider.getValue() + 0.1));
+                e.consume();
+            } else if (e.getCode() == KeyCode.MINUS) {
+                zoomSlider.setValue(Math.max(zoomSlider.getMin(), zoomSlider.getValue() - 0.1));
                 e.consume();
             }
         });
@@ -283,7 +309,7 @@ public class EditorViewController {
             return;
         }
         Spm spm = entry.getSpm();
-        statusLabel.setText("Editing: " + entry.getPath().getFileName() + " | Tips: select Page/Chip/Hit, drag on canvas; double-click an image to edit; Ctrl+E to open brush; Ctrl+S to save to tmp/");
+        statusLabel.setText("Editing: " + entry.getPath().getFileName() + " | Workflow: select Chip -> Import/Preview sprite -> Match bounds -> Save to tmp/. Drag to move; Ctrl+E edit image; Ctrl+S save.");
 
         List<String> pages = new ArrayList<>();
         for (int i = 0; i < Optional.ofNullable(spm.getPageData()).orElse(List.of()).size(); i++) {
@@ -344,13 +370,19 @@ public class EditorViewController {
             viewW = scrollPane.getWidth();
             viewH = scrollPane.getHeight();
         }
-        double canvasW = canvasController.getCanvas().getWidth();
-        double canvasH = canvasController.getCanvas().getHeight();
-        if (canvasW <= 0 || canvasH <= 0 || viewW <= 0 || viewH <= 0) return;
-        double scale = Math.min(viewW / canvasW, viewH / canvasH);
+        var extents = canvasController.getCurrentPageExtents();
+        double targetW = extents.getWidth() + 32; // padding
+        double targetH = extents.getHeight() + 32;
+        if (targetW <= 0 || targetH <= 0) {
+            targetW = canvasController.getCanvas().getWidth();
+            targetH = canvasController.getCanvas().getHeight();
+        }
+        double scale = Math.min(viewW / targetW, viewH / targetH);
         scale = Math.max(zoomSlider.getMin(), Math.min(scale, zoomSlider.getMax()));
         zoomSlider.setValue(scale);
-        scrollPane.requestLayout();
+        // center scroll to current page origin
+        scrollPane.setVvalue(0.5);
+        scrollPane.setHvalue(0.5);
     }
 
     @FXML
@@ -482,11 +514,44 @@ public class EditorViewController {
                 return;
             }
             SpmBinaryWriter.write(spmEntry.getSpm(), fos, Settings.getParsingMode());
+            saveAllImagesToTmp();
             setDirty(false);
             statusLabel.setText("Saved SPM: " + target.getName());
         } catch (Exception ex) {
             log.error("Save SPM failed", ex);
             new Alert(Alert.AlertType.ERROR, "Save failed: " + ex.getMessage()).showAndWait();
+        }
+    }
+
+    @FXML
+    private void onExportBoundsSvg() {
+        if (spmEntry == null || spmEntry.getSpm() == null) {
+            new Alert(Alert.AlertType.ERROR, "No SPM loaded.").showAndWait();
+            return;
+        }
+        int pageIdx = pageList.getSelectionModel().getSelectedIndex();
+        if (invalidPage(pageIdx)) {
+            new Alert(Alert.AlertType.INFORMATION, "Select a page first.").showAndWait();
+            return;
+        }
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Export Bounds SVG");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SVG", "*.svg"));
+        File defaultDir = ensureTmpDir();
+        if (defaultDir != null && defaultDir.isDirectory()) {
+            chooser.setInitialDirectory(defaultDir);
+        }
+        chooser.setInitialFileName("bounds-page-" + pageIdx + ".svg");
+        File target = chooser.showSaveDialog(canvasHolder.getScene().getWindow());
+        if (target == null) return;
+
+        try (FileWriter writer = new FileWriter(target)) {
+            String svg = buildBoundsSvg(pageIdx);
+            writer.write(svg);
+            statusLabel.setText("Exported bounds SVG: " + target.getName());
+        } catch (Exception ex) {
+            log.error("Export bounds SVG failed", ex);
+            new Alert(Alert.AlertType.ERROR, "Export failed: " + ex.getMessage()).showAndWait();
         }
     }
 
@@ -650,7 +715,21 @@ public class EditorViewController {
                 g.setStroke(Color.CYAN);
                 g.setLineWidth(2.0);
                 g.strokeRect(x, y, w, h);
+                g.setFill(Color.color(0, 1, 1, 0.2));
+                g.fillRect(x, y, w, h);
+                drawOriginLabel(g, x, y, "Chip TL", Color.CYAN);
             }
+        }
+
+        if (showPageBoundsCheck.isSelected() && page.getPageRect() != null) {
+            double x = ctx.translateX() + safe(page.getPageRect().getLeft());
+            double y = ctx.translateY() + safe(page.getPageRect().getTop());
+            double w = safe(page.getPageRect().getRight()) - safe(page.getPageRect().getLeft());
+            double h = safe(page.getPageRect().getBottom()) - safe(page.getPageRect().getTop());
+            g.setStroke(Color.ORANGE);
+            g.setLineWidth(1.5);
+            g.strokeRect(x, y, w, h);
+            drawOriginLabel(g, x, y, "Page TL", Color.ORANGE);
         }
 
         if (showHitboxCheck.isSelected() && selectedHitIndex >= 0 && page.getHitRects() != null && selectedHitIndex < page.getHitRects().size()) {
@@ -661,12 +740,33 @@ public class EditorViewController {
             g.restore();
         }
 
+        drawWorkflowHint(g, ctx);
         updateChipPreview();
     }
 
+    private void drawWorkflowHint(GraphicsContext g, SpmRenderer.PageContext ctx) {
+        g.save();
+        g.setFill(Color.color(0, 0, 0, 0.35));
+        g.fillRect(10, 10, 320, 90);
+        g.setFill(Color.WHITE);
+        g.fillText("Workflow: select Chip -> Import/Preview sprite -> Match bounds -> Save to tmp/", 20, 30);
+        g.fillText("Shortcuts: Ctrl+E image edit, Ctrl+S save, Ctrl+Z/Y undo/redo", 20, 50);
+        g.fillText("Zoom: Ctrl+wheel or +/- , middle-drag to pan, Fit centers current page", 20, 70);
+        g.restore();
+    }
+
+    private void drawOriginLabel(GraphicsContext g, double x, double y, String text, Color color) {
+        g.save();
+        g.setFill(Color.color(color.getRed(), color.getGreen(), color.getBlue(), 0.8));
+        g.fillRect(x, y - 14, text.length() * 6 + 6, 16);
+        g.setFill(Color.BLACK);
+        g.fillText(text, x + 3, y - 2);
+        g.restore();
+    }
+
     private void populateChipAndHitLists() {
-        selectedChipIndex = -1;
-        selectedHitIndex = -1;
+        int prevChip = chipList.getSelectionModel().getSelectedIndex();
+        int prevHit = hitList.getSelectionModel().getSelectedIndex();
         int pageIdx = pageList.getSelectionModel().getSelectedIndex();
         if (spmEntry == null || spmEntry.getSpm() == null || pageIdx < 0) {
             chipList.setItems(FXCollections.emptyObservableList());
@@ -687,6 +787,13 @@ public class EditorViewController {
             chips.add("Chip[" + i + "] img=" + chipData.get(i).getImageNo());
         }
         chipList.setItems(FXCollections.observableArrayList(chips));
+        int selectChip = (prevChip >= 0 && prevChip < chipData.size()) ? prevChip : (chipData.isEmpty() ? -1 : 0);
+        if (selectChip >= 0) {
+            chipList.getSelectionModel().select(selectChip);
+            selectedChipIndex = selectChip;
+        } else {
+            selectedChipIndex = -1;
+        }
 
         List<String> hits = new ArrayList<>();
         List<Spm.SPMHitArea> hitData = Optional.ofNullable(page.getHitRects()).orElse(List.of());
@@ -694,9 +801,16 @@ public class EditorViewController {
             hits.add("Hit[" + i + "] type=" + hitData.get(i).getShapeType());
         }
         hitList.setItems(FXCollections.observableArrayList(hits));
+        int selectHit = (prevHit >= 0 && prevHit < hitData.size()) ? prevHit : (hitData.isEmpty() ? -1 : 0);
+        if (selectHit >= 0) {
+            hitList.getSelectionModel().select(selectHit);
+            selectedHitIndex = selectHit;
+        } else {
+            selectedHitIndex = -1;
+        }
         populatePageFields();
-        populateChipFields(null);
-        populateHitFields(null);
+        populateChipFields(selectedChipIndex < 0 ? null : chipData.isEmpty() ? null : chipData.get(selectedChipIndex));
+        populateHitFields(selectedHitIndex < 0 ? null : hitData.isEmpty() ? null : hitData.get(selectedHitIndex));
     }
 
     private static double safe(Integer v) {
@@ -1009,44 +1123,36 @@ public class EditorViewController {
         int sy = (int) Math.round(safe(src.getTop()));
         int sw = (int) Math.round(safe(src.getRight()) - safe(src.getLeft()));
         int sh = (int) Math.round(safe(src.getBottom()) - safe(src.getTop()));
-        int newW = (int) Math.round(imported.getWidth());
-        int newH = (int) Math.round(imported.getHeight());
-        if (sx + newW > base.getWidth() || sy + newH > base.getHeight()) {
-            new Alert(Alert.AlertType.ERROR, "Imported image exceeds source bounds.").showAndWait();
+        int targetW = sw;
+        int targetH = sh;
+        // 优先用 dstRect 尺寸作为目标尺寸，保持 Chip bounds 不变
+        if (chip.getDstRect() != null) {
+            int dw = (int) Math.round(safe(chip.getDstRect().getRight()) - safe(chip.getDstRect().getLeft()));
+            int dh = (int) Math.round(safe(chip.getDstRect().getBottom()) - safe(chip.getDstRect().getTop()));
+            if (dw > 0 && dh > 0) {
+                targetW = dw;
+                targetH = dh;
+            }
+        }
+        if (sx + targetW > base.getWidth() || sy + targetH > base.getHeight()) {
+            new Alert(Alert.AlertType.ERROR, "Target bounds exceed source image.").showAndWait();
             return;
         }
-        WritableImage importedWritable = toWritable(imported);
+        WritableImage importedWritable = resizeTo(imported, targetW, targetH);
 
-        // snapshot old rects for undo
-        Spm.SPMRect oldSrc = cloneRect(chip.getSrcRect());
-        Spm.SPMRect oldDst = cloneRect(chip.getDstRect());
-        WritableImage beforePatch = snapshotRegion(base, sx, sy, newW, newH);
+        if (!confirmSpriteImport(importedWritable, base, sx, sy)) {
+            return;
+        }
+
+        WritableImage beforePatch = snapshotRegion(base, sx, sy, targetW, targetH);
 
         Command cmd = new Command(() -> {
             patchSpriteIntoImage(imgIdx, importedWritable, sx, sy);
-            if (chip.getSrcRect() == null) chip.setSrcRect(new Spm.SPMRect());
-            chip.getSrcRect().setLeft(sx);
-            chip.getSrcRect().setTop(sy);
-            chip.getSrcRect().setRight(sx + newW);
-            chip.getSrcRect().setBottom(sy + newH);
-
-            if (chip.getDstRect() == null) chip.setDstRect(new Spm.SPMRect());
-            chip.getDstRect().setRight(chip.getDstRect().getLeft() == null ? newW : chip.getDstRect().getLeft() + newW);
-            chip.getDstRect().setBottom(chip.getDstRect().getTop() == null ? newH : chip.getDstRect().getTop() + newH);
-
-            chip.setChipWidth(newW);
-            chip.setChipHeight(newH);
             render();
             setDirty(true);
         }, () -> {
             if (beforePatch != null) {
                 patchSpriteIntoImage(imgIdx, beforePatch, sx, sy);
-            }
-            if (chip.getSrcRect() != null && oldSrc != null) {
-                chip.setSrcRect(cloneRect(oldSrc));
-            }
-            if (chip.getDstRect() != null && oldDst != null) {
-                chip.setDstRect(cloneRect(oldDst));
             }
             render();
             setDirty(true);
@@ -1055,6 +1161,50 @@ public class EditorViewController {
         undoStack.push(cmd);
         redoStack.clear();
         statusLabel.setText("Sprite imported: " + png.getName());
+    }
+
+    @FXML
+    private void onMatchBoundsToSprite() {
+        int pageIdx = pageList.getSelectionModel().getSelectedIndex();
+        if (invalidPage(pageIdx)) {
+            new Alert(Alert.AlertType.INFORMATION, "Select a page/chip first.").showAndWait();
+            return;
+        }
+        var page = spmEntry.getSpm().getPageData().get(pageIdx);
+        if (selectedChipIndex < 0 || page.getChipData() == null || selectedChipIndex >= page.getChipData().size()) {
+            new Alert(Alert.AlertType.INFORMATION, "Select a chip to match bounds.").showAndWait();
+            return;
+        }
+        var chip = page.getChipData().get(selectedChipIndex);
+        if (chip.getSrcRect() == null || chip.getDstRect() == null) {
+            new Alert(Alert.AlertType.ERROR, "Chip missing src/dst rect.").showAndWait();
+            return;
+        }
+        int sw = (int) Math.round(safe(chip.getSrcRect().getRight()) - safe(chip.getSrcRect().getLeft()));
+        int sh = (int) Math.round(safe(chip.getSrcRect().getBottom()) - safe(chip.getSrcRect().getTop()));
+        if (sw <= 0 || sh <= 0) {
+            new Alert(Alert.AlertType.ERROR, "Sprite size invalid.").showAndWait();
+            return;
+        }
+        Spm.SPMRect oldDst = cloneRect(chip.getDstRect());
+        Integer oldW = chip.getChipWidth();
+        Integer oldH = chip.getChipHeight();
+
+        Command cmd = new Command(() -> {
+            matchBoundsToSprite(chip);
+            render();
+            setDirty(true);
+        }, () -> {
+            chip.setDstRect(cloneRect(oldDst));
+            chip.setChipWidth(oldW);
+            chip.setChipHeight(oldH);
+            render();
+            setDirty(true);
+        });
+        cmd.redo();
+        undoStack.push(cmd);
+        redoStack.clear();
+        statusLabel.setText("Bounds matched to sprite size: " + sw + "x" + sh);
     }
 
     private void openSpriteEditor(int imageIndex, WritableImage sprite, int srcX, int srcY) {
@@ -1131,6 +1281,15 @@ public class EditorViewController {
         return snapshot;
     }
 
+    private WritableImage resizeTo(Image src, int targetW, int targetH) {
+        WritableImage out = new WritableImage(targetW, targetH);
+        Canvas c = new Canvas(targetW, targetH);
+        GraphicsContext g = c.getGraphicsContext2D();
+        g.drawImage(src, 0, 0, targetW, targetH);
+        c.snapshot(null, out);
+        return out;
+    }
+
     private void patchSpriteIntoImage(int imageIndex, WritableImage sprite, int srcX, int srcY) {
         List<Image> images = canvasController.getLoadedImages();
         if (imageIndex < 0 || imageIndex >= images.size()) {
@@ -1163,13 +1322,149 @@ public class EditorViewController {
         return new WritableImage(base.getPixelReader(), x, y, rw, rh);
     }
 
+    private boolean confirmSpriteImport(WritableImage imported, Image base, int sx, int sy) {
+        int w = (int) imported.getWidth();
+        int h = (int) imported.getHeight();
+        WritableImage originalRegion = snapshotRegion(base, sx, sy, w, h);
+
+        Canvas preview = new Canvas(w, h);
+        GraphicsContext g = preview.getGraphicsContext2D();
+        g.setFill(Color.LIGHTGRAY);
+        g.fillRect(0, 0, w, h);
+        if (originalRegion != null) {
+            g.drawImage(originalRegion, 0, 0);
+        }
+        g.setGlobalAlpha(0.5);
+        g.drawImage(imported, 0, 0);
+        g.setGlobalAlpha(1.0);
+        g.setStroke(Color.RED);
+        g.strokeRect(0.5, 0.5, w - 1, h - 1);
+
+        Label info = new Label("Top-left at (" + sx + ", " + sy + "), size " + w + "x" + h + ". Apply patch?");
+        Button applyBtn = new Button("Apply");
+        Button cancelBtn = new Button("Cancel");
+        final boolean[] result = {false};
+        applyBtn.setOnAction(e -> {
+            result[0] = true;
+            ((Stage) applyBtn.getScene().getWindow()).close();
+        });
+        cancelBtn.setOnAction(e -> ((Stage) cancelBtn.getScene().getWindow()).close());
+
+        HBox buttons = new HBox(10, applyBtn, cancelBtn);
+        BorderPane root = new BorderPane(preview);
+        root.setBottom(new VBox(8, info, buttons));
+        BorderPane.setMargin(root.getBottom(), new Insets(8));
+
+        Stage stage = new Stage();
+        stage.initOwner(canvasHolder.getScene().getWindow());
+        stage.initModality(Modality.WINDOW_MODAL);
+        stage.setTitle("Confirm Sprite Import");
+        stage.setScene(new Scene(root));
+        stage.showAndWait();
+        return result[0];
+    }
+
+    private boolean confirmChipEditSelection() {
+        int pageIdx = pageList.getSelectionModel().getSelectedIndex();
+        if (invalidPage(pageIdx)) return false;
+        var page = spmEntry.getSpm().getPageData().get(pageIdx);
+        if (selectedChipIndex < 0 || page.getChipData() == null || selectedChipIndex >= page.getChipData().size()) {
+            return false;
+        }
+        var chip = page.getChipData().get(selectedChipIndex);
+        Rect dst = Rect.from(chip.getDstRect());
+        Rect src = Rect.from(chip.getSrcRect());
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                "Chip[" + selectedChipIndex + "] src(" + src.x + "," + src.y + "," + src.w + "x" + src.h + "), dst(" + dst.x + "," + dst.y + "," + dst.w + "x" + dst.h + ").\nEdit sprite (or Import to replace)?",
+                ButtonType.OK, ButtonType.CANCEL);
+        alert.setHeaderText("Confirm chip edit");
+        alert.showAndWait();
+        return alert.getResult() == ButtonType.OK;
+    }
+
+    // --- helpers for reuse/testing ---
+    private String buildBoundsSvg(int pageIdx) {
+        var spm = spmEntry.getSpm();
+        var page = spm.getPageData().get(pageIdx);
+        double pageW = page.getPageWidth() == null ? 1024 : page.getPageWidth();
+        double pageH = page.getPageHeight() == null ? 768 : page.getPageHeight();
+        StringBuilder sb = new StringBuilder();
+        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        sb.append("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"").append(pageW).append("\" height=\"").append(pageH).append("\">\n");
+        // page rect
+        if (page.getPageRect() != null) {
+            double x = safe(page.getPageRect().getLeft());
+            double y = safe(page.getPageRect().getTop());
+            double w = safe(page.getPageRect().getRight()) - safe(page.getPageRect().getLeft());
+            double h = safe(page.getPageRect().getBottom()) - safe(page.getPageRect().getTop());
+            sb.append("<rect x=\"").append(x).append("\" y=\"").append(y).append("\" width=\"").append(w).append("\" height=\"").append(h)
+                    .append("\" fill=\"none\" stroke=\"orange\" stroke-width=\"1.5\" />\n");
+        }
+        // chips
+        var chips = Optional.ofNullable(page.getChipData()).orElse(List.of());
+        for (int i = 0; i < chips.size(); i++) {
+            var c = chips.get(i);
+            if (c.getDstRect() == null) continue;
+            double x = safe(c.getDstRect().getLeft());
+            double y = safe(c.getDstRect().getTop());
+            double w = safe(c.getDstRect().getRight()) - safe(c.getDstRect().getLeft());
+            double h = safe(c.getDstRect().getBottom()) - safe(c.getDstRect().getTop());
+            sb.append("<rect x=\"").append(x).append("\" y=\"").append(y).append("\" width=\"").append(w).append("\" height=\"").append(h)
+                    .append("\" fill=\"rgba(0,255,255,0.2)\" stroke=\"cyan\" stroke-width=\"2\" />\n");
+            sb.append("<text x=\"").append(x + 2).append("\" y=\"").append(y + 12).append("\" font-size=\"10\" fill=\"black\">Chip ")
+                    .append(i).append("</text>\n");
+        }
+        sb.append("</svg>");
+        return sb.toString();
+    }
+
+    void matchBoundsToSprite(Spm.SPMChipData chip) {
+        if (chip == null || chip.getSrcRect() == null || chip.getDstRect() == null) return;
+        int sw = (int) Math.round(safe(chip.getSrcRect().getRight()) - safe(chip.getSrcRect().getLeft()));
+        int sh = (int) Math.round(safe(chip.getSrcRect().getBottom()) - safe(chip.getSrcRect().getTop()));
+        int left = safeInt(chip.getDstRect().getLeft());
+        int top = safeInt(chip.getDstRect().getTop());
+        chip.getDstRect().setRight(left + sw);
+        chip.getDstRect().setBottom(top + sh);
+        chip.setChipWidth(sw);
+        chip.setChipHeight(sh);
+    }
+
+    private Integer firstPageFromAnim(Spm.SPMAnimData anim) {
+        if (anim == null || anim.getPatData() == null) return null;
+        for (Spm.SPMPatData pat : anim.getPatData()) {
+            List<Integer> pages = Optional.ofNullable(pat.getPageNo()).orElse(List.of());
+            for (Integer p : pages) {
+                if (p != null && p >= 0) {
+                    return p;
+                }
+            }
+        }
+        return null;
+    }
+
     private void setDirty(boolean dirty) {
         this.dirty = dirty;
         Stage stage = canvasHolder.getScene() == null ? null : (Stage) canvasHolder.getScene().getWindow();
         if (stage != null) {
             stage.setTitle(baseTitle + (dirty ? " *" : ""));
-            statusLabel.setText((dirty ? "Unsaved changes. " : "") + "Tips: select Page/Chip/Hit, drag to move; Ctrl+E edit image; Ctrl+S save to tmp/");
+            String selectionInfo = currentSelectionInfo();
+            statusLabel.setText((dirty ? "Unsaved changes. " : "") + selectionInfo + " Tips: Ctrl+E edit image; Ctrl+S save to tmp/");
         }
+    }
+
+    private String currentSelectionInfo() {
+        String chipInfo = "";
+        int pageIdx = canvasController.getCurrentPageIndex();
+        if (!invalidPage(pageIdx) && selectedChipIndex >= 0) {
+            var page = spmEntry.getSpm().getPageData().get(pageIdx);
+            if (page.getChipData() != null && selectedChipIndex < page.getChipData().size()) {
+                var chip = page.getChipData().get(selectedChipIndex);
+                Rect dst = Rect.from(chip.getDstRect());
+                chipInfo = "Chip[" + selectedChipIndex + "] dst(" + dst.x + "," + dst.y + "," + dst.w + "x" + dst.h + ")";
+            }
+        }
+        return chipInfo;
     }
 
     private List<String> validateSpm() {
@@ -1226,6 +1521,32 @@ public class EditorViewController {
             }
         }
         ImageIO.write(buffered, "png", target);
+    }
+
+    private void saveAllImagesToTmp() {
+        File tmpDir = ensureTmpDir();
+        if (tmpDir == null || !tmpDir.isDirectory()) {
+            log.warn("tmp dir missing, skip saving images");
+            return;
+        }
+        List<Image> images = canvasController.getLoadedImages();
+        List<Spm.SPMImageData> meta = Optional.ofNullable(spmEntry.getSpm().getImageData()).orElse(List.of());
+        for (int i = 0; i < images.size(); i++) {
+            Image img = images.get(i);
+            if (img == null) continue;
+            String name = (i < meta.size() && meta.get(i) != null && meta.get(i).getImageName() != null && !meta.get(i).getImageName().isBlank())
+                    ? meta.get(i).getImageName().replaceAll("[\\\\/:*?\"<>|]", "_")
+                    : "image-" + i + ".png";
+            if (!name.toLowerCase().endsWith(".png")) {
+                name = name + ".png";
+            }
+            File out = new File(tmpDir, name);
+            try {
+                saveImageToFile(img, out);
+            } catch (Exception ex) {
+                log.warn("save image {} failed: {}", name, ex.getMessage());
+            }
+        }
     }
 
     private void updateChipPreview() {

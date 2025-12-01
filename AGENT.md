@@ -13,7 +13,7 @@
 - `spm/Spm.java`：通用视图模型（嵌套 Page/Chip/HitArea/Anim 数据类）。
 - `spm/parser`：统一入口 `SpmParser`，方言 parser（Bhe/Bsdx v200/v202）、`SpmParserFactory`。
 - `spm/hitarea`：命中体绘制实现；Clarias 独立目录与 BHE 对照（见 `spm/hitarea/clarias/README.md`），BSDX 也有独立的 `spm/hitarea/bsdx/LegacyRectHitArea.java`。
-- 编辑模式：右键 SPM → Edit，独立窗口；Chip/Hit 高亮拖拽、表单修改；精灵替换/导入（从文件覆盖 Chip 源区域并自动调整大小）、图片笔刷/撤销，PNG 另存，SPM 导出 JSON/另存为二进制（基础校验）；快捷键 Ctrl+S/Ctrl+Z/Ctrl+Y/Ctrl+E，滚轮+Ctrl 缩放。所有导出/保存默认写到 SPM 同目录的 `tmp/` 目录，避免覆盖原文件。
+- 编辑模式：右键 SPM → Edit，独立窗口；Chip/Hit 高亮拖拽、表单修改；精灵替换/导入（预览叠加后可选应用，覆盖 Chip 源区域并自动调整大小，可一键将 dstRect 匹配精灵尺寸）、图片笔刷/撤销，PNG 另存，SPM 导出 JSON/另存为二进制（基础校验）；快捷键 Ctrl+S/Ctrl+Z/Ctrl+Y/Ctrl+E，滚轮+Ctrl 缩放；画布左上角有工作流与快捷键提示。所有导出/保存默认写到 SPM 同目录的 `tmp/` 目录，避免覆盖原文件。
 - `io/`：`BinaryReader`/`BinaryWriter`。
 - `model/Settings`：全局配置与持久化（包含解析模式、背景、原点、自动播放、图片搜索路径等）。
 - 资源：`src/main/resources/fxml` 界面、`images` 图标；`example` 目录提供 BHE/ BSDX 样例代码与结构参考；`spmBheJson` 为解包出的 JSON 样本。
