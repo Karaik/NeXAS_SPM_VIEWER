@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.image.ImageView?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.karaik.spmviewer.controller.editor.EditorViewController">
+
+    <top>
+        <ToolBar>
+            <items>
+                <Label text="Edit Mode" />
+                <Separator orientation="VERTICAL"/>
+                <Button text="Undo" onAction="#onUndo"/>
+                <Button text="Redo" onAction="#onRedo"/>
+                <Separator orientation="VERTICAL"/>
+                <Label text="Zoom:"/>
+                <Slider fx:id="zoomSlider" min="0.1" max="8.0" value="1.0" prefWidth="160"/>
+                <TextField fx:id="zoomField" prefWidth="70"/>
+                <Button text="100%" onAction="#onZoom1x"/>
+                <Button text="Fit" onAction="#onFitView"/>
+                <Separator orientation="VERTICAL"/>
+                <CheckBox fx:id="showCoordsCheck" text="Show Coords"/>
+                <CheckBox fx:id="showHitboxCheck" text="Hitboxes"/>
+                <CheckBox fx:id="showChipBoundsCheck" text="Chip Bounds"/>
+                <CheckBox fx:id="showPageBoundsCheck" text="Page Bounds"/>
+                <Separator orientation="VERTICAL"/>
+                <Button text="Edit Sprite" onAction="#onEditSprite"/>
+                <Button text="Import Sprite..." onAction="#onImportSprite"/>
+                <Button text="Edit Image" onAction="#onEditImage"/>
+                <Button text="Save Image..." onAction="#onSaveImage"/>
+                <Button text="Export SPM JSON" onAction="#onExportJson"/>
+                <Button text="Save SPM" onAction="#onSaveSpmBinary"/>
+            </items>
+        </ToolBar>
+    </top>
+
+    <center>
+        <SplitPane dividerPositions="0.22, 0.6">
+            <items>
+                <VBox spacing="6" prefWidth="260">
+                    <padding><Insets topRightBottomLeft="8"/></padding>
+                    <children>
+                        <Label text="Pages"/>
+                        <ListView fx:id="pageList"/>
+                        <Label text="Chips"/>
+                        <ListView fx:id="chipList"/>
+                        <Label text="Hitboxes"/>
+                        <ListView fx:id="hitList"/>
+                        <Label text="Animations"/>
+                        <ListView fx:id="animList"/>
+                        <Label text="Images"/>
+                        <ListView fx:id="imageList"/>
+                    </children>
+                </VBox>
+
+                <ScrollPane fx:id="scrollPane" pannable="true" fitToWidth="true" fitToHeight="true"
+                            prefViewportWidth="960" prefViewportHeight="720">
+                    <content>
+                        <StackPane fx:id="canvasHolder">
+                            <padding><Insets topRightBottomLeft="8"/></padding>
+                        </StackPane>
+                    </content>
+                </ScrollPane>
+
+                <VBox spacing="8" prefWidth="280">
+                    <padding><Insets topRightBottomLeft="8"/></padding>
+                    <children>
+                        <TitledPane text="Page">
+                            <content>
+                                <GridPane hgap="6" vgap="6">
+                                    <columnConstraints>
+                                        <ColumnConstraints minWidth="80" halignment="RIGHT"/>
+                                        <ColumnConstraints hgrow="ALWAYS"/>
+                                    </columnConstraints>
+                                    <children>
+                                        <Label text="Width" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                                        <TextField fx:id="pageWidthField" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+                                        <Label text="Height" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                                        <TextField fx:id="pageHeightField" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+                                        <Label text="Center X" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                                        <TextField fx:id="rotateCenterXField" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+                                        <Label text="Center Y" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                                        <TextField fx:id="rotateCenterYField" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                                        <Label text="Rect LTRB" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+                                        <HBox spacing="4" GridPane.rowIndex="4" GridPane.columnIndex="1">
+                                            <children>
+                                                <TextField fx:id="pageLeftField" prefWidth="55"/>
+                                                <TextField fx:id="pageTopField" prefWidth="55"/>
+                                                <TextField fx:id="pageRightField" prefWidth="55"/>
+                                                <TextField fx:id="pageBottomField" prefWidth="55"/>
+                                            </children>
+                                        </HBox>
+                                        <Button text="Apply Page" GridPane.rowIndex="5" GridPane.columnIndex="1" onAction="#onApplyPage"/>
+                                    </children>
+                                </GridPane>
+                            </content>
+                        </TitledPane>
+
+                        <TitledPane text="Chip">
+                            <content>
+                                <GridPane hgap="6" vgap="6">
+                                    <columnConstraints>
+                                        <ColumnConstraints minWidth="80" halignment="RIGHT"/>
+                                        <ColumnConstraints hgrow="ALWAYS"/>
+                                    </columnConstraints>
+                                    <children>
+                                        <Label text="Img #" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                                        <TextField fx:id="chipImageNoField" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+                                        <Label text="Dst X/Y/W/H" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                                        <HBox spacing="4" GridPane.rowIndex="1" GridPane.columnIndex="1">
+                                            <children>
+                                                <TextField fx:id="dstXField" prefWidth="55"/>
+                                                <TextField fx:id="dstYField" prefWidth="55"/>
+                                                <TextField fx:id="dstWField" prefWidth="55"/>
+                                                <TextField fx:id="dstHField" prefWidth="55"/>
+                                            </children>
+                                        </HBox>
+                                        <Label text="Src X/Y/W/H" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                                        <HBox spacing="4" GridPane.rowIndex="2" GridPane.columnIndex="1">
+                                            <children>
+                                                <TextField fx:id="srcXField" prefWidth="55"/>
+                                                <TextField fx:id="srcYField" prefWidth="55"/>
+                                                <TextField fx:id="srcWField" prefWidth="55"/>
+                                                <TextField fx:id="srcHField" prefWidth="55"/>
+                                            </children>
+                                        </HBox>
+                                        <Label text="DrawOpt" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                                        <TextField fx:id="drawOptionField" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                                        <Label text="DrawOptVal" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+                                        <TextField fx:id="drawOptionValueField" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+                                        <Label text="Option" GridPane.rowIndex="5" GridPane.columnIndex="0"/>
+                                        <TextField fx:id="chipOptionField" GridPane.rowIndex="5" GridPane.columnIndex="1"/>
+                                        <Button text="Apply Chip" GridPane.rowIndex="6" GridPane.columnIndex="1" onAction="#onApplyChip"/>
+                                    </children>
+                                </GridPane>
+                            </content>
+                        </TitledPane>
+
+                        <TitledPane text="Chip Preview">
+                            <content>
+                                <VBox spacing="6">
+                                    <children>
+                                        <Label text="Source Slice"/>
+                                        <ImageView fx:id="chipPreview" fitWidth="240" preserveRatio="true" smooth="true"/>
+                                    </children>
+                                </VBox>
+                            </content>
+                        </TitledPane>
+
+                        <TitledPane text="Hit">
+                            <content>
+                                <GridPane hgap="6" vgap="6">
+                                    <columnConstraints>
+                                        <ColumnConstraints minWidth="80" halignment="RIGHT"/>
+                                        <ColumnConstraints hgrow="ALWAYS"/>
+                                    </columnConstraints>
+                                    <children>
+                                        <Label text="Type" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                                        <Label fx:id="hitTypeLabel" text="-" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+                                        <Label text="A/B/C/D" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                                        <HBox spacing="4" GridPane.rowIndex="1" GridPane.columnIndex="1">
+                                            <children>
+                                                <TextField fx:id="hitAField" prefWidth="55"/>
+                                                <TextField fx:id="hitBField" prefWidth="55"/>
+                                                <TextField fx:id="hitCField" prefWidth="55"/>
+                                                <TextField fx:id="hitDField" prefWidth="55"/>
+                                            </children>
+                                        </HBox>
+                                        <Button text="Apply Hit" GridPane.rowIndex="2" GridPane.columnIndex="1" onAction="#onApplyHit"/>
+                                    </children>
+                                </GridPane>
+                            </content>
+                        </TitledPane>
+                    </children>
+                </VBox>
+            </items>
+        </SplitPane>
+    </center>
+
+    <bottom>
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <padding><Insets topRightBottomLeft="8"/></padding>
+            <children>
+                <Label fx:id="statusLabel" text="Ready" HBox.hgrow="ALWAYS"/>
+            </children>
+        </HBox>
+    </bottom>
+</BorderPane>

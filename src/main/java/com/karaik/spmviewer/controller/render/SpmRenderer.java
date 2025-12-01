@@ -49,28 +49,11 @@ public class SpmRenderer {
 
         Spm.SPMPageData page = spm.getPageData().get(pageIndex);
 
-        double translateX;
-        double translateY;
-        double pageOriginX;
-        double pageOriginY;
-
-        if (originMode == Settings.OriginMode.TOP_LEFT && extents != null) {
-            double contentWidth = Math.max(extents.getWidth(), 1.0);
-            double contentHeight = Math.max(extents.getHeight(), 1.0);
-            double anchorX = (canvasWidth - contentWidth) / 2.0;
-            double anchorY = (canvasHeight - contentHeight) / 2.0;
-            translateX = anchorX - extents.minX();
-            translateY = anchorY - extents.minY();
-            pageOriginX = translateX + safe(page.getRotateCenterX());
-            pageOriginY = translateY + safe(page.getRotateCenterY());
-        } else {
-            double worldOriginX = canvasWidth / 2.0;
-            double worldOriginY = canvasHeight / 2.0;
-            translateX = worldOriginX - safe(page.getRotateCenterX());
-            translateY = worldOriginY - safe(page.getRotateCenterY());
-            pageOriginX = worldOriginX;
-            pageOriginY = worldOriginY;
-        }
+        PageContext ctx = computePageContext(page, originMode, extents, canvasWidth, canvasHeight);
+        double translateX = ctx.translateX();
+        double translateY = ctx.translateY();
+        double pageOriginX = ctx.pageOriginX();
+        double pageOriginY = ctx.pageOriginY();
 
         var chips = Optional.ofNullable(page.getChipData()).orElse(List.of());
         for (Spm.SPMChipData c : chips) {
@@ -170,6 +153,38 @@ public class SpmRenderer {
         Rect rr = Rect.from(r);
         return "[" + rr.x + "," + rr.y + "," + (rr.x + rr.w) + "," + (rr.y + rr.h) + "] w=" + rr.w + " h=" + rr.h;
     }
+
+    public PageContext computePageContext(Spm.SPMPageData page,
+                                          Settings.OriginMode originMode,
+                                          CanvasController.PageExtents extents,
+                                          double canvasWidth,
+                                          double canvasHeight) {
+        double translateX;
+        double translateY;
+        double pageOriginX;
+        double pageOriginY;
+
+        if (originMode == Settings.OriginMode.TOP_LEFT && extents != null) {
+            double contentWidth = Math.max(extents.getWidth(), 1.0);
+            double contentHeight = Math.max(extents.getHeight(), 1.0);
+            double anchorX = (canvasWidth - contentWidth) / 2.0;
+            double anchorY = (canvasHeight - contentHeight) / 2.0;
+            translateX = anchorX - extents.minX();
+            translateY = anchorY - extents.minY();
+            pageOriginX = translateX + safe(page.getRotateCenterX());
+            pageOriginY = translateY + safe(page.getRotateCenterY());
+        } else {
+            double worldOriginX = canvasWidth / 2.0;
+            double worldOriginY = canvasHeight / 2.0;
+            translateX = worldOriginX - safe(page.getRotateCenterX());
+            translateY = worldOriginY - safe(page.getRotateCenterY());
+            pageOriginX = worldOriginX;
+            pageOriginY = worldOriginY;
+        }
+        return new PageContext(translateX, translateY, pageOriginX, pageOriginY);
+    }
+
+    public record PageContext(double translateX, double translateY, double pageOriginX, double pageOriginY) { }
 
     private Image getImageByNo(List<Image> images, Integer no) {
         if (no == null || no < 0 || no >= images.size()) return null;

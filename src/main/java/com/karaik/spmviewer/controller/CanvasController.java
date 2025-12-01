@@ -111,6 +111,10 @@ public class CanvasController {
         return currentPageExtents;
     }
 
+    public List<Image> getLoadedImages() {
+        return loadedImages;
+    }
+
     public Optional<Rectangle2D> getPageBoundsViewport(Settings.OriginMode originMode) {
         if (currentSpm == null || currentPageIndex < 0
                 || currentSpm.getPageData() == null

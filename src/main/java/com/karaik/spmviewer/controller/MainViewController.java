@@ -11,8 +11,10 @@ import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
+import javafx.fxml.FXMLLoader;
 import javafx.fxml.FXML;
 import javafx.scene.Group;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.*;
@@ -30,6 +32,7 @@ import javafx.stage.Stage;
 import com.karaik.spmviewer.controller.UiStateController;
 
 import java.awt.image.BufferedImage;
+import java.net.URL;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 import javafx.util.converter.NumberStringConverter;
@@ -49,6 +52,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.karaik.spmviewer.controller.AnimationPlanBuilder.AnimationFrame;
+import com.karaik.spmviewer.controller.editor.EditorViewController;
 
 @Slf4j
 public class MainViewController {
@@ -138,6 +142,7 @@ public class MainViewController {
         setupOriginControls();
         setupAnimationControls();
         setupSpmListCellFactory();
+        setupSpmListContextMenu();
         setupActionListeners();
         setupCanvasInteractions();
         setupValueBindings();
@@ -251,6 +256,19 @@ public class MainViewController {
                 }
             }
         });
+    }
+
+    private void setupSpmListContextMenu() {
+        ContextMenu menu = new ContextMenu();
+        MenuItem editItem = new MenuItem("Edit");
+        editItem.setOnAction(e -> openEditor(spmListView.getSelectionModel().getSelectedItem()));
+        menu.getItems().add(editItem);
+        menu.setOnShowing(e -> {
+            SpmEntry sel = spmListView.getSelectionModel().getSelectedItem();
+            boolean enable = sel != null && sel.getStatus() == SpmEntry.Status.SUCCESS && sel.getSpm() != null;
+            editItem.setDisable(!enable);
+        });
+        spmListView.setContextMenu(menu);
     }
 
     private void setupActionListeners() {
@@ -534,6 +552,35 @@ public class MainViewController {
         Thread t = new Thread(loadTask, "spm-load-" + myGen);
         t.setDaemon(true);
         t.start();
+    }
+
+    private void openEditor(SpmEntry entry) {
+        if (entry == null || entry.getStatus() != SpmEntry.Status.SUCCESS || entry.getSpm() == null) {
+            return;
+        }
+        try {
+            URL fxml = getClass().getResource("/fxml/EditorView.fxml");
+            if (fxml == null) {
+                throw new IllegalStateException("EditorView.fxml not found");
+            }
+            FXMLLoader loader = new FXMLLoader(fxml);
+            Parent root = loader.load();
+            EditorViewController controller = loader.getController();
+            controller.init(entry, spmFileHandler.getCurrentDirectory());
+
+            Stage stage = new Stage();
+            stage.setTitle("Edit - " + entry.getPath().getFileName());
+            stage.setScene(new Scene(root, 1080, 720));
+            URL iconUrl = getClass().getResource("/images/head.png");
+            if (iconUrl != null) {
+                stage.getIcons().add(new Image(iconUrl.toExternalForm()));
+            }
+            stage.initOwner(canvasHolder.getScene().getWindow());
+            stage.show();
+        } catch (Exception ex) {
+            log.error("Failed to open editor", ex);
+            new Alert(Alert.AlertType.ERROR, "Failed to open editor: " + ex.getMessage()).showAndWait();
+        }
     }
 
     private void selectPage(Integer index) {
