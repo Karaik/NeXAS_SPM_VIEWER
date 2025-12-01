@@ -22,9 +22,10 @@
 4. **编辑模式**（右键列表中的 SPM → Edit）：
    - 左侧选择 Page/Chip/Hit；画布支持平移/缩放（中键拖动、Ctrl+滚轮，Fit 居中当前页）。
    - Chip/Hit 可拖拽；表单可编辑字段，撤销/重做（Ctrl+Z/Y）。
-   - 精灵编辑：`Edit Sprite` 以当前 srcRect 截取并涂改；`Import Sprite...` 选择 PNG，先预览叠加（左上角对齐，显示尺寸/位置）再应用，并自动更新 srcRect/dstRect/宽高，可用 “Match Bounds to Sprite” 一键同步 dstRect 尺寸。
+   - 精灵编辑：`Edit Sprite` 以当前 srcRect 截取并涂改；`Import Sprite...` 选择 PNG，先预览叠加（左上角对齐，显示尺寸/位置）再应用，按现有 bounds 尺寸缩放覆盖到 srcRect，bounds 不被修改；可用 “Match Bounds to Sprite” 一键同步 dstRect 尺寸。
    - 图像编辑：选中图片后 Ctrl+E 进入笔刷模式，可撤销；保存仅更新内存并标记 dirty。
-   - 导出：PNG/JSON/SPM 二进制默认落在 `tmp/` 目录；保存前会做索引和矩形范围校验。
+   - 导出：PNG/JSON/SPM 二进制默认落在 `tmp/` 目录（保存 SPM 时会同时将当前图片写入 tmp/）；保存前会做索引和矩形范围校验。
+   - Bounds 导出：Viewer 中图片列表右键可导出叠加 Chip/Page bounds 的透明 PNG，文件名继承原图名；导出目录记忆上次选择。
    - 工作流提示：画布左上角提示导入/匹配/保存步骤与快捷键；状态栏显示当前选中 Chip 尺寸信息。
 
 ## 目录结构（节选）

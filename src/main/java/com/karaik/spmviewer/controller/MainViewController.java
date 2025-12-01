@@ -26,6 +26,8 @@ import javafx.scene.input.*;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.transform.Scale;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -326,10 +328,15 @@ public class MainViewController {
         imageList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, item) -> {
             if (item != null) {
                 try {
-                    previewImage(Integer.parseInt(item.split(":")[0].trim()), item);
+                    int idx = Integer.parseInt(item.split(":")[0].trim());
+                    previewImage(idx, item);
+                    refreshImagePreviewWithBounds(idx);
                 } catch (NumberFormatException ignored) {}
             }
         });
+        setupImageContextMenu();
+        showChipBoundsCheck.selectedProperty().addListener((obs, o, n) -> refreshImagePreviewWithBounds(getSelectedImageIndex()));
+        showPageBoundsCheck.selectedProperty().addListener((obs, o, n) -> refreshImagePreviewWithBounds(getSelectedImageIndex()));
 
         animSelector.setOnAction(e -> {
             if (animSelector.getValue() == null) {
@@ -429,6 +436,16 @@ public class MainViewController {
     private void setupExpandAllContextMenus() {
         setupExpandAllContextMenu(pageTree);
         setupExpandAllContextMenu(animTree);
+    }
+
+    private void setupImageContextMenu() {
+        ContextMenu menu = new ContextMenu();
+        MenuItem exportChip = new MenuItem("Export with Chip Bounds (PNG)");
+        exportChip.setOnAction(e -> exportImageWithBounds(true));
+        MenuItem exportPage = new MenuItem("Export with Page Bounds (PNG)");
+        exportPage.setOnAction(e -> exportImageWithBounds(false));
+        menu.getItems().addAll(exportChip, exportPage);
+        imageList.setContextMenu(menu);
     }
 
     private void setupExpandAllContextMenu(TreeView<?> treeView) {
@@ -998,6 +1015,223 @@ public class MainViewController {
             log.warn("Failed to parse animation index from {}", displayName, ex);
         }
         return -1;
+    }
+
+    private void exportImageWithBounds(boolean chipMode) {
+        SpmEntry selected = spmListView.getSelectionModel().getSelectedItem();
+        if (selected == null || selected.getSpm() == null) return;
+        if (imageList.getSelectionModel().isEmpty()) return;
+        int imgIdx;
+        try {
+            imgIdx = Integer.parseInt(imageList.getSelectionModel().getSelectedItem().split(":")[0].trim());
+        } catch (Exception ex) {
+            return;
+        }
+        List<Image> imgs = canvasController.getLoadedImages();
+        if (imgIdx < 0 || imgIdx >= imgs.size()) return;
+        Image base = imgs.get(imgIdx);
+        if (base == null) return;
+
+        WritableImage out = new WritableImage((int) base.getWidth(), (int) base.getHeight());
+        Canvas c = new Canvas(base.getWidth(), base.getHeight());
+        GraphicsContext g = c.getGraphicsContext2D();
+        g.drawImage(base, 0, 0);
+
+        List<Spm.SPMPageData> pages = Optional.ofNullable(selected.getSpm().getPageData()).orElse(List.of());
+        if (chipMode) {
+            g.setStroke(Color.CYAN);
+            g.setLineWidth(2.0);
+            g.setFill(Color.color(0, 1, 1, 0.2));
+            for (Spm.SPMPageData p : pages) {
+                for (Spm.SPMChipData chip : Optional.ofNullable(p.getChipData()).orElse(List.of())) {
+                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) continue;
+                    Spm.SPMRect src = chip.getSrcRect();
+                    if (src == null) continue;
+                    double x = val(src.getLeft());
+                    double y = val(src.getTop());
+                    double w = val(src.getRight()) - val(src.getLeft());
+                    double h = val(src.getBottom()) - val(src.getTop());
+                    g.fillRect(x, y, w, h);
+                    g.strokeRect(x, y, w, h);
+                }
+            }
+        } else {
+            g.setStroke(Color.ORANGE);
+            g.setLineWidth(1.5);
+            for (Spm.SPMPageData p : pages) {
+                double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
+                double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+                boolean has = false;
+                for (Spm.SPMChipData chip : Optional.ofNullable(p.getChipData()).orElse(List.of())) {
+                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) continue;
+                    Spm.SPMRect src = chip.getSrcRect();
+                    if (src == null) continue;
+                    double x1 = val(src.getLeft());
+                    double y1 = val(src.getTop());
+                    double x2 = val(src.getRight());
+                    double y2 = val(src.getBottom());
+                    minX = Math.min(minX, Math.min(x1, x2));
+                    minY = Math.min(minY, Math.min(y1, y2));
+                    maxX = Math.max(maxX, Math.max(x1, x2));
+                    maxY = Math.max(maxY, Math.max(y1, y2));
+                    has = true;
+                }
+                if (has) {
+                    double x = minX;
+                    double y = minY;
+                    double w = maxX - minX;
+                    double h = maxY - minY;
+                    g.strokeRect(x, y, w, h);
+                }
+            }
+        }
+        c.snapshot(null, out);
+
+        // derive base filename from image meta
+        String baseName = "image-" + imgIdx;
+        List<Spm.SPMImageData> imgsMeta = Optional.ofNullable(selected.getSpm().getImageData()).orElse(List.of());
+        if (imgIdx < imgsMeta.size() && imgsMeta.get(imgIdx) != null && imgsMeta.get(imgIdx).getImageName() != null
+                && !imgsMeta.get(imgIdx).getImageName().isBlank()) {
+            baseName = imgsMeta.get(imgIdx).getImageName().replaceAll("[\\\\/:*?\"<>|]", "_");
+            if (baseName.toLowerCase().endsWith(".png")) {
+                baseName = baseName.substring(0, baseName.length() - 4);
+            }
+        }
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(chipMode ? "Export Image with Chip Bounds" : "Export Image with Page Bounds");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG", "*.png"));
+        chooser.setInitialFileName(baseName + (chipMode ? "-chip-bounds.png" : "-page-bounds.png"));
+        Path lastExport = Settings.getLastExportDir();
+        if (lastExport != null && lastExport.toFile().isDirectory()) {
+            chooser.setInitialDirectory(lastExport.toFile());
+        }
+        File target = chooser.showSaveDialog(canvasHolder.getScene().getWindow());
+        if (target == null) return;
+        try {
+            savePng(out, target);
+            statusLabel.setText("Exported bounds: " + target.getName());
+            Settings.setLastExportDir(target.toPath().getParent());
+        } catch (Exception ex) {
+            log.error("export bounds failed", ex);
+            new Alert(Alert.AlertType.ERROR, "Export failed: " + ex.getMessage()).showAndWait();
+        }
+    }
+
+    private void savePng(Image image, File target) throws IOException {
+        WritableImage snap = new WritableImage((int) image.getWidth(), (int) image.getHeight());
+        SnapshotParameters params = new SnapshotParameters();
+        params.setFill(Color.TRANSPARENT);
+        Canvas tmp = new Canvas(image.getWidth(), image.getHeight());
+        tmp.getGraphicsContext2D().drawImage(image, 0, 0);
+        tmp.snapshot(params, snap);
+
+        BufferedImage buffered = new BufferedImage((int) image.getWidth(), (int) image.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        int[] buffer = new int[(int) image.getWidth()];
+        PixelReader reader = snap.getPixelReader();
+        for (int y = 0; y < image.getHeight(); y++) {
+            reader.getPixels(0, y, (int) image.getWidth(), 1, PixelFormat.getIntArgbInstance(), buffer, 0, (int) image.getWidth());
+            for (int x = 0; x < image.getWidth(); x++) {
+                buffered.setRGB(x, y, buffer[x]);
+            }
+        }
+        ImageIO.write(buffered, "png", target);
+    }
+
+    private double val(Integer v) {
+        return v == null ? 0.0 : v.doubleValue();
+    }
+
+    private void overlayImageBounds(int imgIdx) {
+        if (imgIdx < 0) return;
+        List<Image> imgs = canvasController.getLoadedImages();
+        if (imgIdx < 0 || imgIdx >= imgs.size()) return;
+        Image img = imgs.get(imgIdx);
+        if (img == null) return;
+        double imgW = img.getWidth();
+        double imgH = img.getHeight();
+
+        // locate where image was drawn in previewImage
+        double canvasW = canvasController.getCanvas().getWidth();
+        double canvasH = canvasController.getCanvas().getHeight();
+        double offsetX = (canvasW - imgW) / 2.0;
+        double offsetY = (canvasH - imgH) / 2.0;
+
+        GraphicsContext g = canvasController.getCanvas().getGraphicsContext2D();
+        g.save();
+        // chip bounds
+        if (showChipBoundsCheck.isSelected()) {
+            g.setStroke(Color.CYAN);
+            g.setFill(Color.color(0, 1, 1, 0.15));
+            g.setLineWidth(2.0);
+            for (Spm.SPMPageData p : Optional.ofNullable(spmListView.getSelectionModel().getSelectedItem().getSpm().getPageData()).orElse(List.of())) {
+                for (Spm.SPMChipData chip : Optional.ofNullable(p.getChipData()).orElse(List.of())) {
+                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) continue;
+                    Spm.SPMRect src = chip.getSrcRect();
+                    if (src == null) continue;
+                    double x = offsetX + val(src.getLeft());
+                    double y = offsetY + val(src.getTop());
+                    double w = val(src.getRight()) - val(src.getLeft());
+                    double h = val(src.getBottom()) - val(src.getTop());
+                    g.fillRect(x, y, w, h);
+                    g.strokeRect(x, y, w, h);
+                }
+            }
+        }
+        // page bounds approximated as union of chips per page for this image
+        if (showPageBoundsCheck.isSelected()) {
+            g.setStroke(Color.ORANGE);
+            g.setLineWidth(1.5);
+            List<Spm.SPMPageData> pages = Optional.ofNullable(spmListView.getSelectionModel().getSelectedItem().getSpm().getPageData()).orElse(List.of());
+            for (Spm.SPMPageData p : pages) {
+                double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
+                double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+                boolean has = false;
+                for (Spm.SPMChipData chip : Optional.ofNullable(p.getChipData()).orElse(List.of())) {
+                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) continue;
+                    Spm.SPMRect src = chip.getSrcRect();
+                    if (src == null) continue;
+                    double x1 = val(src.getLeft());
+                    double y1 = val(src.getTop());
+                    double x2 = val(src.getRight());
+                    double y2 = val(src.getBottom());
+                    minX = Math.min(minX, Math.min(x1, x2));
+                    minY = Math.min(minY, Math.min(y1, y2));
+                    maxX = Math.max(maxX, Math.max(x1, x2));
+                    maxY = Math.max(maxY, Math.max(y1, y2));
+                    has = true;
+                }
+                if (has) {
+                    double x = offsetX + minX;
+                    double y = offsetY + minY;
+                    double w = maxX - minX;
+                    double h = maxY - minY;
+                    g.strokeRect(x, y, w, h);
+                }
+            }
+        }
+        g.restore();
+    }
+
+    private void refreshImagePreviewWithBounds(int idx) {
+        if (idx < 0) return;
+        try {
+            previewImage(idx, imageList.getSelectionModel().getSelectedItem());
+            if (showChipBoundsCheck.isSelected() || showPageBoundsCheck.isSelected()) {
+                overlayImageBounds(idx);
+            }
+        } catch (Exception ex) {
+            log.debug("refresh image preview failed", ex);
+        }
+    }
+
+    private int getSelectedImageIndex() {
+        if (imageList.getSelectionModel().isEmpty()) return -1;
+        try {
+            return Integer.parseInt(imageList.getSelectionModel().getSelectedItem().split(":")[0].trim());
+        } catch (Exception ex) {
+            return -1;
+        }
     }
 
     private record TreeSelectionContext(int animIndex, int patIndex, List<Integer> pageNos) { }

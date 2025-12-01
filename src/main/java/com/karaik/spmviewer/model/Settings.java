@@ -22,6 +22,7 @@ public class Settings {
     private static final String BG_COLOR_KEY = "backgroundColor";
     private static final String AUTO_PLAY_KEY = "autoPlayAnimations";
     private static final String IMAGE_SEARCH_PATHS_KEY = "imageSearchPaths";
+    private static final String LAST_EXPORT_DIR_KEY = "lastExportDir";
     private static final String ORIGIN_MODE_KEY = "originMode";
     private static final String ENV_IMAGE_PATHS = "SPM_IMAGE_PATHS";
     private static final String DEFAULT_CHARSET = "windows-31j";
@@ -61,6 +62,7 @@ public class Settings {
     private static boolean currentAutoPlayEnabled = true;
     private static List<Path> currentImageSearchRoots = new ArrayList<>();
     private static OriginMode currentOriginMode = OriginMode.CENTER;
+    private static Path lastExportDir = null;
 
     static {
         currentCharsetName = PREFS.get(CHARSET_KEY, DEFAULT_CHARSET);
@@ -104,6 +106,10 @@ public class Settings {
             currentOriginMode = OriginMode.valueOf(originName);
         } catch (IllegalArgumentException e) {
             currentOriginMode = OriginMode.CENTER;
+        }
+        String exportDir = PREFS.get(LAST_EXPORT_DIR_KEY, "");
+        if (!exportDir.isBlank()) {
+            lastExportDir = Paths.get(exportDir);
         }
     }
 
@@ -184,6 +190,17 @@ public class Settings {
         if (mode != null) {
             currentOriginMode = mode;
             PREFS.put(ORIGIN_MODE_KEY, mode.name());
+        }
+    }
+
+    public static Path getLastExportDir() {
+        return lastExportDir;
+    }
+
+    public static void setLastExportDir(Path dir) {
+        if (dir != null) {
+            lastExportDir = dir;
+            PREFS.put(LAST_EXPORT_DIR_KEY, dir.toString());
         }
     }
 
