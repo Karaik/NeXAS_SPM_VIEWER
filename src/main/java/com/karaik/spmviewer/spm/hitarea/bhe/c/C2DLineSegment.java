@@ -49,4 +49,9 @@ public class C2DLineSegment extends Spm.SPMHitArea {
         g.fillOval(sx - 2, sy - 2, 4, 4);
         g.fillOval(ex - 2, ey - 2, 4, 4);
     }
+
+    public double[] getBounds() {
+        if (x1 == null || y1 == null || x2 == null || y2 == null) return new double[]{0, 0, 0, 0};
+        return new double[]{Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)};
+    }
 }

@@ -1,6 +1,7 @@
 package com.karaik.spmviewer.controller.render;
 
 import com.karaik.spmviewer.controller.CanvasController;
+import com.karaik.spmviewer.model.Direction;
 import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.scene.canvas.Canvas;
@@ -39,7 +40,10 @@ public class SpmRenderer {
                        Settings.BackgroundMode bgMode,
                        Color bgColor,
                        Settings.OriginMode originMode,
-                       CanvasController.PageExtents extents) {
+                       CanvasController.PageExtents extents,
+                       Direction direction,
+                       boolean horizontalFlip,
+                       int selectedHitIndex) {
 
         GraphicsContext g = canvas.getGraphicsContext2D();
         double canvasWidth = canvas.getWidth();
@@ -72,6 +76,23 @@ public class SpmRenderer {
             pageOriginY = worldOriginY;
         }
 
+        boolean applyDirection = direction != null && direction != Direction.S;
+        boolean applyFlip = horizontalFlip;
+
+        if (applyDirection || applyFlip) {
+            g.save();
+            double pivotX = pageOriginX;
+            double pivotY = pageOriginY;
+            g.translate(pivotX, pivotY);
+            if (applyFlip) {
+                g.scale(-1.0, 1.0);
+            }
+            if (applyDirection) {
+                g.rotate(direction.getRotateAngle());
+            }
+            g.translate(-pivotX, -pivotY);
+        }
+
         var chips = Optional.ofNullable(page.getChipData()).orElse(List.of());
         for (Spm.SPMChipData c : chips) {
             Image img = getImageByNo(images, c.getImageNo());
@@ -91,19 +112,34 @@ public class SpmRenderer {
             }
         }
 
+        if (showHitboxes) {
+            var hitboxes = Optional.ofNullable(page.getHitRects()).orElse(List.of());
+            for (int i = 0; i < hitboxes.size(); i++) {
+                hitboxes.get(i).drawSelf(g, pageOriginX, pageOriginY);
+                if (i == selectedHitIndex) {
+                    double[] b = hitboxes.get(i).getBounds();
+                    double sx = pageOriginX + b[0];
+                    double sy = pageOriginY + b[1];
+                    double sw = b[2] - b[0];
+                    double sh = b[3] - b[1];
+                    g.setStroke(Color.LIME);
+                    g.setLineWidth(2);
+                    g.strokeRect(sx, sy, sw, sh);
+                    g.setLineWidth(1);
+                }
+            }
+        }
+
+        if (applyDirection || applyFlip) {
+            g.restore();
+        }
+
         if (showPageBounds) {
             drawPageBounds(g, page, translateX, translateY, extents);
         }
 
         if (showCoords) {
             drawCoordinateSystem(g, pageOriginX, pageOriginY, originMode, extents);
-        }
-
-        if (showHitboxes) {
-            var hitboxes = Optional.ofNullable(page.getHitRects()).orElse(List.of());
-            for (Spm.SPMHitArea hitbox : hitboxes) {
-                hitbox.drawSelf(g, pageOriginX, pageOriginY);
-            }
         }
     }
 

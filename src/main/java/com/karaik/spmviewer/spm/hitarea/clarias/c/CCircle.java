@@ -15,4 +15,11 @@ public class CCircle extends com.karaik.spmviewer.spm.hitarea.bhe.c.CCircle {
         setSkippedBytes(reader.readBytes(4));
         setRadius(reader.readInt());
     }
+
+    @Override
+    public double[] getBounds() {
+        if (getCenterX() == null || getCenterY() == null || getRadius() == null) return new double[]{0, 0, 0, 0};
+        double r = Math.abs(getRadius());
+        return new double[]{getCenterX() - r, getCenterY() - r, getCenterX() + r, getCenterY() + r};
+    }
 }

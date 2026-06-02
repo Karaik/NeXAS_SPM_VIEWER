@@ -47,4 +47,13 @@ public class CRect extends Spm.SPMHitArea {
         g.setStroke(Color.RED);
         g.strokeRect(x, y, w, h);
     }
+
+    public double[] getBounds() {
+        if (rect == null) return new double[]{0, 0, 0, 0};
+        int L = rect.getLeft() == null ? 0 : rect.getLeft();
+        int T = rect.getTop() == null ? 0 : rect.getTop();
+        int R = rect.getRight() == null ? 0 : rect.getRight();
+        int B = rect.getBottom() == null ? 0 : rect.getBottom();
+        return new double[]{Math.min(L, R), Math.min(T, B), Math.max(L, R), Math.max(T, B)};
+    }
 }
