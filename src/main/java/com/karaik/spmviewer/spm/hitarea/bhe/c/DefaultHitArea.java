@@ -60,4 +60,12 @@ public class DefaultHitArea extends Spm.SPMHitArea {
         g.setStroke(Color.CORNFLOWERBLUE);
         g.strokeRect(x, y, w, h);
     }
+
+    @Override
+    public double[] getBounds() {
+        if (xMin == null) return new double[]{0, 0, 0, 0};
+        double x1 = Math.min(xMin, xMax), x2 = Math.max(xMin, xMax);
+        double y1 = Math.min(yMin, yMax), y2 = Math.max(yMin, yMax);
+        return new double[]{x1, y1, x2, y2};
+    }
 }

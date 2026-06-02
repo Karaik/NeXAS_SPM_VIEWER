@@ -38,4 +38,9 @@ public class C2DDot extends Spm.SPMHitArea {
         g.setStroke(Color.GOLD);
         g.strokeOval(px - 2, py - 2, 4, 4);
     }
+
+    public double[] getBounds() {
+        if (x == null || y == null) return new double[]{0, 0, 0, 0};
+        return new double[]{x - 4, y - 4, x + 4, y + 4};
+    }
 }

@@ -58,4 +58,11 @@ public class CRotatableRect extends Spm.SPMHitArea {
         g.setStroke(Color.LIMEGREEN);
         g.strokeRect(x, y, w, h);
     }
+
+    public double[] getBounds() {
+        if (centerX == null || centerY == null || width == null || height == null) return new double[]{0, 0, 0, 0};
+        double halfW = width / 2.0;
+        double halfH = height / 2.0;
+        return new double[]{centerX - halfW, centerY - halfH, centerX + halfW, centerY + halfH};
+    }
 }

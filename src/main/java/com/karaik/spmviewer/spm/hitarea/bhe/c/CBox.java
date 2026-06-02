@@ -60,4 +60,9 @@ public class CBox extends Spm.SPMHitArea {
         g.setStroke(Color.TEAL);
         g.strokeRect(left, top, width, height);
     }
+
+    public double[] getBounds() {
+        if (minX == null || minY == null || maxX == null || maxY == null) return new double[]{0, 0, 0, 0};
+        return new double[]{Math.min(minX, maxX), Math.min(minY, maxY), Math.max(minX, maxX), Math.max(minY, maxY)};
+    }
 }

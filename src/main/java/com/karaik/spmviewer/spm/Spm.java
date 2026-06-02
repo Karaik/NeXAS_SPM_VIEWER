@@ -65,12 +65,14 @@ public class Spm {
 
         /**
          * 在Canvas上绘制自身的形状。
-         *
-         * @param g           JavaFX的绘图上下文
-         * @param pageOriginX 页面原点在画布上的X坐标
-         * @param pageOriginY 页面原点在画布上的Y坐标
          */
         public abstract void drawSelf(GraphicsContext g, double pageOriginX, double pageOriginY);
+
+        /**
+         * 返回命中体在页面坐标系中的轴对齐边界框 {minX, minY, maxX, maxY}。
+         * 用于编辑器中的命中测试和选取框计算。
+         */
+        public abstract double[] getBounds();
     }
 
     @Data

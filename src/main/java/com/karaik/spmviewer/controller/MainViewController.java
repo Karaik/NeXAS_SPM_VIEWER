@@ -1,8 +1,13 @@
 package com.karaik.spmviewer.controller;
 
+import com.karaik.spmviewer.controller.editor.HitAreaEditor;
+import com.karaik.spmviewer.io.BinaryWriter;
+import com.karaik.spmviewer.model.Direction;
 import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.model.SpmEntry;
+import com.karaik.spmviewer.spm.DirectionResolver;
 import com.karaik.spmviewer.spm.Spm;
+import com.karaik.spmviewer.spm.writer.SpmWriterFactory;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
@@ -21,6 +26,7 @@ import javafx.scene.image.PixelFormat;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.*;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -71,6 +77,9 @@ public class MainViewController {
     @FXML private Slider fpsSlider;
     @FXML private TextField fpsField;
     @FXML private CheckBox alwaysOnTopCheck;
+    @FXML private CheckBox editHitboxCheck;
+    @FXML private HBox directionBox;
+    @FXML private CheckBox dirAutoCheck;
     @FXML private ListView<SpmEntry> spmListView;
     @FXML private TreeView<String> pageTree;
     @FXML private TreeView<String> animTree;
@@ -101,6 +110,13 @@ public class MainViewController {
     private boolean updatingFrameSlider = false;
     private boolean animSelectionFromTree = false;
     private TreeSelectionContext pendingTreeSelection;
+
+    private ToggleGroup directionGroup;
+    private final List<ToggleButton> directionButtons = new ArrayList<>();
+    private DirectionResolver.DirectionMode currentDirectionMode = DirectionResolver.DirectionMode.NONE;
+    private int currentRotateDirection = 0;
+
+    private HitAreaEditor hitAreaEditor;
 
     @FXML
     public void initialize() {
@@ -137,12 +153,14 @@ public class MainViewController {
         setupBackgroundControls();
         setupOriginControls();
         setupAnimationControls();
+        setupDirectionControls();
         setupSpmListCellFactory();
         setupActionListeners();
         setupCanvasInteractions();
         setupValueBindings();
         setupFiltering();
         setupExpandAllContextMenus();
+        setupEditor();
         uiStateController.clearAllPanels();
         canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
     }
@@ -208,6 +226,186 @@ public class MainViewController {
             displayAnimationFrame(target, false);
         });
     }
+    private void setupEditor() {
+        hitAreaEditor = new HitAreaEditor(canvasController.getCanvas(), canvasController);
+        hitAreaEditor.setOnSelectionChanged(idx -> {
+            canvasController.setSelectedHitIndex(idx);
+            if (idx >= 0 && hitTable.getItems().size() > idx) {
+                hitTable.getSelectionModel().select(idx);
+                hitTable.scrollTo(idx);
+            } else {
+                hitTable.getSelectionModel().clearSelection();
+            }
+            renderCurrentPage();
+        });
+        hitAreaEditor.setOnModified(() -> {
+            uiStateController.updateTablesForPage(getCurrentPageData());
+            renderCurrentPage();
+        });
+        canvasController.getCanvas().addEventFilter(MouseEvent.ANY, hitAreaEditor);
+
+        editHitboxCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            hitAreaEditor.setEnabled(newVal);
+            if (!newVal) {
+                canvasController.setSelectedHitIndex(-1);
+                hitTable.getSelectionModel().clearSelection();
+                renderCurrentPage();
+            }
+            showHitboxCheck.setSelected(newVal || showHitboxCheck.isSelected());
+        });
+    }
+
+    @FXML
+    private void onSaveSpm() {
+        SpmEntry entry = spmListView.getSelectionModel().getSelectedItem();
+        if (entry == null || entry.getSpm() == null) {
+            new Alert(Alert.AlertType.WARNING, "No SPM file selected.").showAndWait();
+            return;
+        }
+        try {
+            Spm spm = entry.getSpm();
+            var writer = SpmWriterFactory.getWriter(Settings.getParsingMode(), spm.getSpmVersion());
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            try (BinaryWriter bw = new BinaryWriter(bos, Settings.getCharsetName())) {
+                writer.write(spm, bw);
+            }
+            java.nio.file.Files.write(entry.getPath(), bos.toByteArray());
+            statusLabel.setText("Saved: " + entry.getPath().getFileName());
+        } catch (Exception ex) {
+            log.error("Failed to save SPM", ex);
+            new Alert(Alert.AlertType.ERROR, "Save failed: " + ex.getMessage()).showAndWait();
+        }
+    }
+
+    private Spm.SPMPageData getCurrentPageData() {
+        Spm spm = canvasController.getCurrentSpm();
+        if (spm == null) return null;
+        int idx = canvasController.getCurrentPageIndex();
+        if (idx < 0 || spm.getPageData() == null || idx >= spm.getPageData().size()) return null;
+        return spm.getPageData().get(idx);
+    }
+
+    private void setupDirectionControls() {
+        directionGroup = new ToggleGroup();
+
+        dirAutoCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                syncDirectionFromAnimation();
+            }
+        });
+
+        setDirectionControlsEnabled(false);
+    }
+
+    /**
+     * 根据当前模式重建方向按钮。mode=3: 8 按钮，mode=4: 16 按钮，mode=7: 8 按钮。
+     */
+    private void rebuildDirectionButtons() {
+        directionGroup = new ToggleGroup();
+        directionButtons.clear();
+
+        // 移除旧的按钮（保留 Label 和 Auto checkbox）
+        directionBox.getChildren().removeIf(node -> node instanceof ToggleButton);
+
+        int count = DirectionResolver.getDirectionCount(currentRotateDirection);
+        if (count == 0 && currentDirectionMode == DirectionResolver.DirectionMode.CANVAS_TRANSFORM) {
+            count = 8; // mode 7 始终 8 方向
+        }
+        if (count == 0) {
+            setDirectionControlsEnabled(false);
+            return;
+        }
+
+        for (int i = 0; i < count; i++) {
+            String label = DirectionResolver.getDirectionLabel(currentRotateDirection, i);
+            boolean isMirror = DirectionResolver.isMirrorDirection(currentRotateDirection, i);
+            String tooltip = isMirror ? "dir " + i + " (mirror of " + DirectionResolver.getMirrorSourceIndex(currentRotateDirection, i) + ")" : "dir " + i;
+            int dirIndex = i;
+
+            ToggleButton btn = new ToggleButton(label);
+            btn.setToggleGroup(directionGroup);
+            btn.setUserData(dirIndex);
+            btn.setPrefWidth(24);
+            btn.setPadding(new javafx.geometry.Insets(2, 4, 2, 4));
+            if (isMirror) {
+                btn.setStyle("-fx-text-fill: #999; -fx-font-size: 10px;");
+            }
+            btn.setTooltip(new Tooltip(tooltip));
+            btn.setOnAction(e -> {
+                if (btn.isSelected()) {
+                    onDirectionSelected(dirIndex);
+                }
+            });
+            if (i == 0) {
+                btn.setSelected(true);
+            }
+            directionButtons.add(btn);
+        }
+        // 插入到 Label("Dir:") 之后、Auto checkbox 之前
+        directionBox.getChildren().addAll(1, directionButtons);
+        setDirectionControlsEnabled(true);
+    }
+
+    private void setDirectionControlsEnabled(boolean enabled) {
+        directionBox.setVisible(enabled);
+        directionBox.setManaged(enabled);
+    }
+
+    private void resetDirection() {
+        currentDirectionMode = DirectionResolver.DirectionMode.NONE;
+        currentRotateDirection = 0;
+        setDirectionControlsEnabled(false);
+        canvasController.setCurrentDirection(Direction.S);
+        canvasController.setHorizontalFlip(false);
+    }
+
+    private void onDirectionSelected(int dirIndex) {
+        dirAutoCheck.setSelected(false);
+
+        if (currentDirectionMode == DirectionResolver.DirectionMode.PAGE_OFFSET) {
+            canvasController.setCurrentDirection(Direction.S);
+            boolean mirror = DirectionResolver.isMirrorDirection(currentRotateDirection, dirIndex);
+            canvasController.setHorizontalFlip(mirror);
+            int pageOffset = mirror
+                    ? DirectionResolver.getMirrorSourceIndex(currentRotateDirection, dirIndex)
+                    : dirIndex;
+            int groupSpan = DirectionResolver.getGroupSpan(currentRotateDirection);
+            int basePage;
+            if (currentAnimationIndex >= 0 && currentAnimationIndex < currentAnimationFrames.size()) {
+                basePage = currentAnimationFrames.get(currentAnimationIndex).pageNo();
+            } else {
+                int curPage = canvasController.getCurrentPageIndex();
+                basePage = curPage >= 0 ? (curPage / groupSpan) * groupSpan : 0;
+            }
+            selectPage(basePage + pageOffset);
+        } else {
+            canvasController.setHorizontalFlip(false);
+            canvasController.setCurrentDirection(Direction.fromIndex(dirIndex));
+            renderCurrentPage();
+        }
+    }
+
+    private void syncDirectionFromAnimation() {
+        SpmEntry entry = spmListView.getSelectionModel().getSelectedItem();
+        if (entry == null || entry.getSpm() == null) return;
+        String displayName = animSelector.getValue();
+        if (displayName == null) return;
+        int animIndex = parseAnimIndex(displayName);
+        List<Spm.SPMAnimData> animList = Optional.ofNullable(entry.getSpm().getAnimData()).orElse(List.of());
+        if (animIndex < 0 || animIndex >= animList.size()) return;
+        Spm.SPMAnimData anim = animList.get(animIndex);
+        currentRotateDirection = Optional.ofNullable(anim.getAnimRotateDirection()).orElse(0);
+        currentDirectionMode = DirectionResolver.getMode(currentRotateDirection);
+        rebuildDirectionButtons();
+        canvasController.setCurrentDirection(Direction.S);
+        canvasController.setHorizontalFlip(false);
+        if (currentDirectionMode != DirectionResolver.DirectionMode.NONE) {
+            if (!directionButtons.isEmpty()) {
+                directionButtons.get(0).setSelected(true);
+            }
+        }
+    }
+
     private void setupBackgroundControls() {
         backgroundModeSelector.getItems().setAll(Settings.BackgroundMode.values());
         backgroundModeSelector.setValue(Settings.getBackgroundMode());
@@ -317,8 +515,10 @@ public class MainViewController {
             if (animSelector.getValue() == null) {
                 pendingTreeSelection = null;
                 animSelectionFromTree = false;
+                setDirectionControlsEnabled(false);
                 return;
             }
+            syncDirectionFromAnimation();
             boolean triggeredByTree = animSelectionFromTree;
             boolean displayFirstFrame = !triggeredByTree;
             if (!prepareAnimationFrames(displayFirstFrame)) {
@@ -472,12 +672,16 @@ public class MainViewController {
         // 非法/未成功的条目：直接清空并退出
         if (entry == null || entry.getStatus() != SpmEntry.Status.SUCCESS) {
             currentlyLoadingSpm = null;
+            resetDirection();
             uiStateController.clearAllPanels();
             canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
             statusLabel.setText("Ready");
             progressBar.setVisible(false);
             return;
         }
+
+        // 重置方向状态（在确认有合法 entry 之后）
+        resetDirection();
 
         currentlyLoadingSpm = entry;
 
@@ -792,7 +996,19 @@ public class MainViewController {
         int normalized = ((index % size) + size) % size;
         currentAnimationIndex = normalized;
         AnimationFrame frame = currentAnimationFrames.get(normalized);
-        selectPage(frame.pageNo());
+        int targetPage = frame.pageNo();
+        if (currentDirectionMode == DirectionResolver.DirectionMode.PAGE_OFFSET && !dirAutoCheck.isSelected()) {
+            Toggle selected = directionGroup.getSelectedToggle();
+            if (selected != null && selected.getUserData() instanceof Integer dirIndex) {
+                boolean mirror = DirectionResolver.isMirrorDirection(currentRotateDirection, dirIndex);
+                canvasController.setHorizontalFlip(mirror);
+                int pageOffset = mirror
+                        ? DirectionResolver.getMirrorSourceIndex(currentRotateDirection, dirIndex)
+                        : dirIndex;
+                targetPage = frame.pageNo() + pageOffset;
+            }
+        }
+        selectPage(targetPage);
         updateFrameUi();
     }
 

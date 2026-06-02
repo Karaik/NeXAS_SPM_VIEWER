@@ -80,4 +80,11 @@ public class CRotatableBox extends Spm.SPMHitArea {
             g.strokeText("z±" + sizeZ / 2, x, y - 4);
         }
     }
+
+    public double[] getBounds() {
+        if (centerX == null || centerY == null || sizeX == null || sizeY == null) return new double[]{0, 0, 0, 0};
+        double halfW = sizeX / 2.0;
+        double halfH = sizeY / 2.0;
+        return new double[]{centerX - halfW, centerY - halfH, centerX + halfW, centerY + halfH};
+    }
 }

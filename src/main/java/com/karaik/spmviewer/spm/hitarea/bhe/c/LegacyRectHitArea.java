@@ -50,4 +50,13 @@ public class LegacyRectHitArea extends Spm.SPMHitArea {
         g.setStroke(Color.PURPLE);
         g.strokeRect(x, y, w, h);
     }
+
+    public double[] getBounds() {
+        if (hitRect == null) return new double[]{0, 0, 0, 0};
+        int L = hitRect.getLeft() == null ? 0 : hitRect.getLeft();
+        int T = hitRect.getTop() == null ? 0 : hitRect.getTop();
+        int R = hitRect.getRight() == null ? 0 : hitRect.getRight();
+        int B = hitRect.getBottom() == null ? 0 : hitRect.getBottom();
+        return new double[]{Math.min(L, R), Math.min(T, B), Math.max(L, R), Math.max(T, B)};
+    }
 }

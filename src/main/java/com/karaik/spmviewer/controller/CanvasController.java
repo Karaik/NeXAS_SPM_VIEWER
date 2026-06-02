@@ -1,6 +1,7 @@
 package com.karaik.spmviewer.controller;
 
 import com.karaik.spmviewer.controller.render.SpmRenderer;
+import com.karaik.spmviewer.model.Direction;
 import com.karaik.spmviewer.model.Settings;
 import com.karaik.spmviewer.spm.Spm;
 import javafx.geometry.Rectangle2D;
@@ -36,6 +37,9 @@ public class CanvasController {
 
     private Spm currentSpm;
     private int currentPageIndex = -1;
+    private Direction currentDirection = Direction.S;
+    private boolean horizontalFlip = false;
+    private int selectedHitIndex = -1;
     private double preferredContentWidth = MIN_CONTENT_SIZE;
     private double preferredContentHeight = MIN_CONTENT_SIZE;
     private PageExtents currentPageExtents = PageExtents.empty();
@@ -64,6 +68,20 @@ public class CanvasController {
         updatePageExtentsAndCanvas();
     }
 
+    public Direction getCurrentDirection() { return currentDirection; }
+
+    public void setCurrentDirection(Direction direction) {
+        this.currentDirection = direction != null ? direction : Direction.S;
+    }
+
+    public boolean isHorizontalFlip() { return horizontalFlip; }
+
+    public void setHorizontalFlip(boolean flip) { this.horizontalFlip = flip; }
+
+    public int getSelectedHitIndex() { return selectedHitIndex; }
+
+    public void setSelectedHitIndex(int idx) { this.selectedHitIndex = idx; }
+
     public void renderPage(boolean showCoords, boolean showChipBounds, boolean showHitboxes,
                            boolean showPageBounds, Settings.BackgroundMode bgMode, Color bgColor,
                            Settings.OriginMode originMode) {
@@ -74,7 +92,7 @@ public class CanvasController {
         }
         renderer.render(canvas, currentSpm, currentPageIndex, loadedImages,
                 showCoords, showChipBounds, showHitboxes, showPageBounds,
-                bgMode, bgColor, originMode, currentPageExtents);
+                bgMode, bgColor, originMode, currentPageExtents, currentDirection, horizontalFlip, selectedHitIndex);
     }
 
     public void previewImage(int imageIndex, String imageName, Settings.BackgroundMode bgMode, Color bgColor) {

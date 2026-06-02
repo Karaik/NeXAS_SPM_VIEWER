@@ -116,7 +116,16 @@
                     <TextField fx:id="fpsField" prefWidth="50"/>
                 </HBox>
 
+                <HBox fx:id="directionBox" alignment="CENTER_LEFT" spacing="4" visible="false" managed="false">
+                    <children>
+                        <Label text="Dir:"/>
+                        <CheckBox fx:id="dirAutoCheck" text="Auto" selected="true"/>
+                    </children>
+                </HBox>
+
                 <HBox alignment="CENTER_LEFT" spacing="6">
+                    <CheckBox fx:id="editHitboxCheck" text="Edit Hitboxes"/>
+                    <Button text="Save SPM" onAction="#onSaveSpm"/>
                     <Button text="Export PNG" onAction="#onExportPng"/>
                 </HBox>
             </children>

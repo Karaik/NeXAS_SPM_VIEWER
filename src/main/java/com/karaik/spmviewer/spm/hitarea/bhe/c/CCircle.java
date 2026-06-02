@@ -43,4 +43,12 @@ public class CCircle extends Spm.SPMHitArea {
         g.setStroke(Color.ORANGE);
         g.strokeOval(cx - r, cy - r, r * 2, r * 2);
     }
+
+    public double[] getBounds() {
+        if (centerX == null || centerY == null || radius == null) return new double[]{0, 0, 0, 0};
+        int cx = centerX;
+        int cy = centerY;
+        int r = Math.max(0, radius);
+        return new double[]{cx - r, cy - r, cx + r, cy + r};
+    }
 }
