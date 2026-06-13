@@ -1,10 +1,12 @@
 package com.karaik.spmviewer.controller;
 
 import com.karaik.spmviewer.spm.Spm;
+import javafx.scene.SnapshotParameters;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.Image;
 import javafx.scene.image.WritableImage;
+import javafx.scene.paint.Color;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -94,7 +96,7 @@ final class SpmExportSupport {
         Canvas canvas = new Canvas(bounds.width(), bounds.height());
         GraphicsContext g = canvas.getGraphicsContext2D();
         drawPage(g, page, images, bounds);
-        return canvas.snapshot(null, null);
+        return snapshotTransparent(canvas);
     }
 
     static WritableImage renderChipImage(Spm.SPMChipData chip, List<Image> images) {
@@ -105,7 +107,7 @@ final class SpmExportSupport {
         Canvas canvas = new Canvas(bounds.width(), bounds.height());
         GraphicsContext g = canvas.getGraphicsContext2D();
         drawChip(g, chip, images, -bounds.x(), -bounds.y());
-        return canvas.snapshot(null, null);
+        return snapshotTransparent(canvas);
     }
 
     static WritableImage renderImageBoundsOverlay(Spm spm, List<Image> images, int imageIndex, boolean chipMode) {
@@ -150,7 +152,7 @@ final class SpmExportSupport {
                 }
             }
         }
-        return hasOverlay ? canvas.snapshot(null, null) : null;
+        return hasOverlay ? snapshotTransparent(canvas) : null;
     }
 
     static String stripExtension(String name) {
@@ -265,6 +267,12 @@ final class SpmExportSupport {
 
     private static int safe(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private static WritableImage snapshotTransparent(Canvas canvas) {
+        SnapshotParameters parameters = new SnapshotParameters();
+        parameters.setFill(Color.TRANSPARENT);
+        return canvas.snapshot(parameters, null);
     }
 
     record AnimationSlotRef(int animIndex, int patIndex, int slotIndex, int pageIndex) {

@@ -1015,7 +1015,9 @@ public class MainViewController {
         if (showChipBoundsCheck.isSelected() || showPageBoundsCheck.isSelected()) {
             drawImageBoundsOverlay(g, imageIndex, 0.0, 0.0);
         }
-        return canvas.snapshot(null, out);
+        SnapshotParameters parameters = new SnapshotParameters();
+        parameters.setFill(Color.TRANSPARENT);
+        return canvas.snapshot(parameters, out);
     }
 
     private String buildCurrentExportFileName() {
