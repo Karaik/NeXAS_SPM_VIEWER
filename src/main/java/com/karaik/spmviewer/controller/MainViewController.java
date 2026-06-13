@@ -6,6 +6,7 @@ import com.karaik.spmviewer.spm.Spm;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -13,6 +14,7 @@ import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.FXML;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Group;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -23,12 +25,14 @@ import javafx.scene.image.PixelFormat;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.*;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.transform.Scale;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import com.karaik.spmviewer.controller.UiStateController;
@@ -52,6 +56,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.Callable;
 
 import com.karaik.spmviewer.controller.AnimationPlanBuilder.AnimationFrame;
 import com.karaik.spmviewer.controller.editor.EditorViewController;
@@ -107,6 +113,10 @@ public class MainViewController {
     private boolean updatingFrameSlider = false;
     private boolean animSelectionFromTree = false;
     private TreeSelectionContext pendingTreeSelection;
+    private boolean exportInProgress = false;
+    private ExportContext currentExportContext;
+    private Task<?> currentBusyTask;
+    private ChangeListener<String> busyStatusListener;
 
     @FXML
     public void initialize() {
@@ -433,8 +443,8 @@ public class MainViewController {
     }
 
     private void setupExpandAllContextMenus() {
-        setupExpandAllContextMenu(pageTree);
-        setupExpandAllContextMenu(animTree);
+        setupExpandAllContextMenu(pageTree, true);
+        setupExpandAllContextMenu(animTree, false);
     }
 
     private void setupImageContextMenu() {
@@ -447,7 +457,7 @@ public class MainViewController {
         imageList.setContextMenu(menu);
     }
 
-    private void setupExpandAllContextMenu(TreeView<?> treeView) {
+    private void setupExpandAllContextMenu(TreeView<?> treeView, boolean pageTreeMenu) {
         var contextMenu = new ContextMenu();
         var expandAllItem = new MenuItem("Expand All");
         expandAllItem.setOnAction(event -> {
@@ -456,6 +466,29 @@ public class MainViewController {
             }
         });
         contextMenu.getItems().add(expandAllItem);
+        if (pageTreeMenu) {
+            MenuItem exportPagesByPage = new MenuItem("Export All Pages by Page Bounds");
+            exportPagesByPage.setOnAction(event -> exportPagesBatch(false));
+            MenuItem exportPagesByChip = new MenuItem("Export All Pages by Chip Bounds");
+            exportPagesByChip.setOnAction(event -> exportPagesBatch(true));
+            contextMenu.getItems().addAll(new SeparatorMenuItem(), exportPagesByPage, exportPagesByChip);
+            contextMenu.setOnShowing(event -> {
+                boolean enabled = hasLoadedSpm() && isRootTreeSelection(pageTree);
+                exportPagesByPage.setDisable(!enabled || exportInProgress);
+                exportPagesByChip.setDisable(!enabled || exportInProgress);
+            });
+        } else {
+            MenuItem exportAnimsByPage = new MenuItem("Export All Animation Slots by Page Bounds");
+            exportAnimsByPage.setOnAction(event -> exportAnimationsBatch(false));
+            MenuItem exportAnimsByChip = new MenuItem("Export All Animation Slots by Chip Bounds");
+            exportAnimsByChip.setOnAction(event -> exportAnimationsBatch(true));
+            contextMenu.getItems().addAll(new SeparatorMenuItem(), exportAnimsByPage, exportAnimsByChip);
+            contextMenu.setOnShowing(event -> {
+                boolean enabled = hasLoadedSpm() && isRootTreeSelection(animTree);
+                exportAnimsByPage.setDisable(!enabled || exportInProgress);
+                exportAnimsByChip.setDisable(!enabled || exportInProgress);
+            });
+        }
         treeView.setContextMenu(contextMenu);
     }
 
@@ -508,7 +541,7 @@ public class MainViewController {
             currentlyLoadingSpm = null;
             uiStateController.clearAllPanels();
             canvasController.clearCanvas(Settings.getBackgroundMode(), Settings.getBackgroundColor());
-            statusLabel.setText("Ready");
+            setStatusText("Ready");
             progressBar.setVisible(false);
             return;
         }
@@ -517,7 +550,7 @@ public class MainViewController {
 
         // UI：进入“加载中”状态
         progressBar.progressProperty().unbind();
-        statusLabel.setText("Loading " + entry.getPath().getFileName() + "...");
+        setStatusText("Loading " + entry.getPath().getFileName() + "...");
         progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
         progressBar.setVisible(true);
         animSearchField.clear();
@@ -549,7 +582,7 @@ public class MainViewController {
             // 确保UI更新后将ScrollPane滚动到中心
             Platform.runLater(this::centerScrollPane);
 
-            statusLabel.setText("Ready");
+            setStatusText("Ready");
             progressBar.setVisible(false);
             currentlyLoadingSpm = null;
         });
@@ -560,7 +593,7 @@ public class MainViewController {
                 return;
             }
             log.error("Failed to load {}", entry.getPath().getFileName(), loadTask.getException());
-            statusLabel.setText("Failed to load " + entry.getPath().getFileName());
+            setStatusText("Failed to load " + entry.getPath().getFileName());
             progressBar.setVisible(false);
             currentlyLoadingSpm = null;
         });
@@ -608,6 +641,7 @@ public class MainViewController {
         if (index < 0 || index >= pageCount) return;
         canvasController.setCurrentPageIndex(index);
         uiStateController.updateTablesForPage(spm.getPageData().get(index));
+        currentExportContext = ExportContext.page(index);
         renderCurrentPage();
     }
 
@@ -616,6 +650,7 @@ public class MainViewController {
         pageTree.getSelectionModel().clearSelection();
         uiStateController.updateTablesForPage(null);
         log.debug("Previewing image index {} ({})", index, imageName);
+        currentExportContext = ExportContext.image(index);
         canvasController.previewImage(index, imageName, Settings.getBackgroundMode(), Settings.getBackgroundColor());
         Platform.runLater(this::centerScrollPane);
     }
@@ -641,12 +676,248 @@ public class MainViewController {
         renderCurrentPage();
     }
 
+    private boolean hasLoadedSpm() {
+        SpmEntry selected = spmListView.getSelectionModel().getSelectedItem();
+        return selected != null && selected.getStatus() == SpmEntry.Status.SUCCESS && selected.getSpm() != null;
+    }
+
+    private boolean isRootTreeSelection(TreeView<?> treeView) {
+        if (treeView == null || treeView.getRoot() == null) {
+            return false;
+        }
+        TreeItem<?> selected = treeView.getSelectionModel().getSelectedItem();
+        return selected == null || selected == treeView.getRoot();
+    }
+
+    private void exportPagesBatch(boolean chipMode) {
+        SpmEntry selected = spmListView.getSelectionModel().getSelectedItem();
+        if (selected == null || selected.getSpm() == null) {
+            return;
+        }
+        Path targetDir = chooseExportDirectory(chipMode ? "Export Pages by Chip Bounds" : "Export Pages by Page Bounds");
+        if (targetDir == null) {
+            return;
+        }
+        List<ExportItem> items = buildPageExportItems(selected, chipMode);
+        startBatchExport(items, targetDir, chipMode ? "Exporting page chips..." : "Exporting pages...");
+    }
+
+    private void exportAnimationsBatch(boolean chipMode) {
+        SpmEntry selected = spmListView.getSelectionModel().getSelectedItem();
+        if (selected == null || selected.getSpm() == null) {
+            return;
+        }
+        Path targetDir = chooseExportDirectory(chipMode ? "Export Animation Slots by Chip Bounds" : "Export Animation Slots by Page Bounds");
+        if (targetDir == null) {
+            return;
+        }
+        List<ExportItem> items = buildAnimationExportItems(selected, chipMode);
+        startBatchExport(items, targetDir, chipMode ? "Exporting animation chips..." : "Exporting animation slots...");
+    }
+
+    private Path chooseExportDirectory(String title) {
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle(title);
+        Path lastExport = Settings.getLastExportDir();
+        if (lastExport != null && lastExport.toFile().isDirectory()) {
+            chooser.setInitialDirectory(lastExport.toFile());
+        }
+        File chosen = chooser.showDialog(canvasHolder.getScene().getWindow());
+        return chosen == null ? null : chosen.toPath();
+    }
+
+    private List<ExportItem> buildPageExportItems(SpmEntry entry, boolean chipMode) {
+        String spmBaseName = SpmExportSupport.sanitizeFileComponent(
+                SpmExportSupport.stripExtension(entry.getPath().getFileName().toString()));
+        List<Image> images = List.copyOf(canvasController.getLoadedImages());
+        List<Spm.SPMPageData> pages = Optional.ofNullable(entry.getSpm().getPageData()).orElse(List.of());
+        List<ExportItem> items = new ArrayList<>();
+        for (int pageIndex = 0; pageIndex < pages.size(); pageIndex++) {
+            Spm.SPMPageData page = pages.get(pageIndex);
+            if (chipMode) {
+                List<Spm.SPMChipData> chips = Optional.ofNullable(page.getChipData()).orElse(List.of());
+                for (int chipIndex = 0; chipIndex < chips.size(); chipIndex++) {
+                    Spm.SPMChipData chip = chips.get(chipIndex);
+                    SpmExportSupport.IntRect chipBounds = SpmExportSupport.computeChipBounds(chip);
+                    if (chipBounds == null) {
+                        continue;
+                    }
+                    String fileName = String.format("%s_page_%03d_chip_%03d_%dx%d.png",
+                            spmBaseName, pageIndex, chipIndex, chipBounds.width(), chipBounds.height());
+                    items.add(new ExportItem(fileName, () -> SpmExportSupport.renderChipImage(chip, images)));
+                }
+            } else {
+                SpmExportSupport.IntRect pageBounds = SpmExportSupport.computePageBounds(page);
+                if (pageBounds == null) {
+                    continue;
+                }
+                String fileName = String.format("%s_page_%03d_%dx%d.png",
+                        spmBaseName, pageIndex, pageBounds.width(), pageBounds.height());
+                items.add(new ExportItem(fileName, () -> SpmExportSupport.renderPageImage(page, images, pageBounds)));
+            }
+        }
+        return items;
+    }
+
+    private List<ExportItem> buildAnimationExportItems(SpmEntry entry, boolean chipMode) {
+        String spmBaseName = SpmExportSupport.sanitizeFileComponent(
+                SpmExportSupport.stripExtension(entry.getPath().getFileName().toString()));
+        List<Image> images = List.copyOf(canvasController.getLoadedImages());
+        List<Spm.SPMPageData> pages = Optional.ofNullable(entry.getSpm().getPageData()).orElse(List.of());
+        List<SpmExportSupport.AnimationSlotRef> slots = SpmExportSupport.collectAnimationSlots(entry.getSpm());
+        List<ExportItem> items = new ArrayList<>();
+        for (SpmExportSupport.AnimationSlotRef slot : slots) {
+            if (slot.pageIndex() < 0 || slot.pageIndex() >= pages.size()) {
+                continue;
+            }
+            Spm.SPMPageData page = pages.get(slot.pageIndex());
+            if (chipMode) {
+                List<Spm.SPMChipData> chips = Optional.ofNullable(page.getChipData()).orElse(List.of());
+                for (int chipIndex = 0; chipIndex < chips.size(); chipIndex++) {
+                    Spm.SPMChipData chip = chips.get(chipIndex);
+                    SpmExportSupport.IntRect chipBounds = SpmExportSupport.computeChipBounds(chip);
+                    if (chipBounds == null) {
+                        continue;
+                    }
+                    String fileName = String.format("%s_anim_%03d_pat_%03d_slot_%03d_page_%03d_chip_%03d_%dx%d.png",
+                            spmBaseName, slot.animIndex(), slot.patIndex(), slot.slotIndex(),
+                            slot.pageIndex(), chipIndex, chipBounds.width(), chipBounds.height());
+                    items.add(new ExportItem(fileName, () -> SpmExportSupport.renderChipImage(chip, images)));
+                }
+            } else {
+                SpmExportSupport.IntRect pageBounds = SpmExportSupport.computePageBounds(page);
+                if (pageBounds == null) {
+                    continue;
+                }
+                String fileName = String.format("%s_anim_%03d_pat_%03d_slot_%03d_page_%03d_%dx%d.png",
+                        spmBaseName, slot.animIndex(), slot.patIndex(), slot.slotIndex(),
+                        slot.pageIndex(), pageBounds.width(), pageBounds.height());
+                items.add(new ExportItem(fileName, () -> SpmExportSupport.renderPageImage(page, images, pageBounds)));
+            }
+        }
+        return items;
+    }
+
+    private void startBatchExport(List<ExportItem> items, Path targetDir, String progressMessage) {
+        if (exportInProgress) {
+            return;
+        }
+        if (items.isEmpty()) {
+            new Alert(Alert.AlertType.INFORMATION, "Nothing to export.").showAndWait();
+            return;
+        }
+
+        Task<ExportSummary> exportTask = new Task<>() {
+            @Override
+            protected ExportSummary call() throws Exception {
+                Files.createDirectories(targetDir);
+                int exported = 0;
+                int skipped = 0;
+                int total = items.size();
+                updateProgress(0, Math.max(1, total));
+                updateMessage(progressMessage);
+                for (int i = 0; i < total; i++) {
+                    ExportItem item = items.get(i);
+                    updateMessage(progressMessage + " " + (i + 1) + "/" + total);
+                    WritableImage image = runOnFxThread(item.renderer());
+                    if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
+                        skipped++;
+                    } else {
+                        writePng(image, targetDir.resolve(item.fileName()));
+                        exported++;
+                    }
+                    updateProgress(i + 1, total);
+                }
+                return new ExportSummary(exported, skipped, total, targetDir);
+            }
+        };
+
+        beginBusyState(exportTask);
+        exportTask.setOnSucceeded(event -> {
+            ExportSummary summary = exportTask.getValue();
+            Settings.setLastExportDir(summary.targetDir());
+            endBusyState();
+            setStatusText(String.format("Exported %d of %d files to %s",
+                    summary.exported(), summary.total(), summary.targetDir().getFileName()));
+        });
+        exportTask.setOnFailed(event -> {
+            Throwable ex = exportTask.getException();
+            log.error("batch export failed", ex);
+            endBusyState();
+            new Alert(Alert.AlertType.ERROR, "Export failed: " + (ex == null ? "unknown error" : ex.getMessage())).showAndWait();
+        });
+
+        Thread exportThread = new Thread(exportTask, "spm-export");
+        exportThread.setDaemon(true);
+        exportThread.start();
+    }
+
+    private void beginBusyState(Task<?> task) {
+        exportInProgress = true;
+        progressBar.progressProperty().unbind();
+        progressBar.progressProperty().bind(task.progressProperty());
+        if (busyStatusListener != null && currentBusyTask != null) {
+            currentBusyTask.messageProperty().removeListener(busyStatusListener);
+        }
+        currentBusyTask = task;
+        busyStatusListener = (obs, oldVal, newVal) -> setStatusText(newVal == null ? "" : newVal);
+        task.messageProperty().addListener(busyStatusListener);
+        setStatusText(task.getMessage() == null ? "" : task.getMessage());
+        progressBar.setVisible(true);
+        setMainUiDisabled(true);
+    }
+
+    private void endBusyState() {
+        exportInProgress = false;
+        if (currentBusyTask != null && busyStatusListener != null) {
+            currentBusyTask.messageProperty().removeListener(busyStatusListener);
+        }
+        currentBusyTask = null;
+        busyStatusListener = null;
+        progressBar.progressProperty().unbind();
+        progressBar.setVisible(false);
+        setMainUiDisabled(false);
+    }
+
+    private void setMainUiDisabled(boolean disabled) {
+        if (canvasHolder.getScene() == null || canvasHolder.getScene().getRoot() == null) {
+            return;
+        }
+        Parent root = canvasHolder.getScene().getRoot();
+        if (root instanceof BorderPane borderPane) {
+            if (borderPane.getTop() != null) {
+                borderPane.getTop().setDisable(disabled);
+            }
+            if (borderPane.getCenter() != null) {
+                borderPane.getCenter().setDisable(disabled);
+            }
+        }
+        progressBar.setDisable(false);
+        statusLabel.setDisable(false);
+    }
+
     /**
      * 将ScrollPane的滚动条设置到中心位置 (0.5, 0.5)。
      */
     private void centerScrollPane() {
         scrollPane.setHvalue(0.5);
         scrollPane.setVvalue(0.5);
+    }
+
+    private <T> T runOnFxThread(Callable<T> callable) throws Exception {
+        if (Platform.isFxApplicationThread()) {
+            return callable.call();
+        }
+        FutureTask<T> task = new FutureTask<>(callable);
+        Platform.runLater(task);
+        return task.get();
+    }
+
+    private void setStatusText(String text) {
+        if (statusLabel.textProperty().isBound()) {
+            statusLabel.textProperty().unbind();
+        }
+        statusLabel.setText(text);
     }
 
     @FXML private void onOpenDirectory() {
@@ -658,58 +929,31 @@ public class MainViewController {
     }
 
     @FXML private void onExportPng() {
-        if (canvasController.getCurrentSpm() == null || canvasController.getCurrentPageIndex() < 0) {
-            new Alert(Alert.AlertType.WARNING, "No page selected to export.").showAndWait();
+        if (!hasLoadedSpm()) {
+            new Alert(Alert.AlertType.WARNING, "No SPM selected to export.").showAndWait();
             return;
         }
         var fc = new FileChooser();
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG", "*.png"));
-        fc.setInitialFileName("spm-export.png");
+        fc.setInitialFileName(buildCurrentExportFileName());
+        Path lastExport = Settings.getLastExportDir();
+        if (lastExport != null && lastExport.toFile().isDirectory()) {
+            fc.setInitialDirectory(lastExport.toFile());
+        }
         File out = fc.showSaveDialog(canvasHolder.getScene().getWindow());
         if (out == null) return;
 
-        var prevMode  = Settings.getBackgroundMode();
-        var prevColor = Settings.getBackgroundColor();
-        boolean showCoords = showCoordsCheck.isSelected();
-        boolean showChipBounds = showChipBoundsCheck.isSelected();
-        boolean showHitboxes = showHitboxCheck.isSelected();
-        boolean showPageBounds = showPageBoundsCheck.isSelected();
-        Settings.OriginMode originMode = Settings.getOriginMode();
-
         try {
-            Settings.setBackgroundMode(Settings.BackgroundMode.SOLID_COLOR);
-            Settings.setBackgroundColor(Color.TRANSPARENT);
-
-            var canvas = canvasController.getCanvas();
-            var graphics = canvas.getGraphicsContext2D();
-            graphics.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
-
-            canvasController.renderPage(
-                    showCoords,
-                    showChipBounds,
-                    showHitboxes,
-                    false,
-                    Settings.BackgroundMode.SOLID_COLOR,
-                    Color.TRANSPARENT,
-                    originMode
-            );
-
-            SnapshotParameters sp = new SnapshotParameters();
-            sp.setFill(Color.TRANSPARENT);
-            if (showPageBounds) {
-                canvasController.getPageBoundsViewport(originMode).ifPresent(sp::setViewport);
+            WritableImage snapshot = captureCurrentViewForExport();
+            if (snapshot == null) {
+                new Alert(Alert.AlertType.WARNING, "Nothing to export for the current view.").showAndWait();
+                return;
             }
-            WritableImage snapshot = canvas.snapshot(sp, null);
-
             writePng(snapshot, out.toPath());
-
-            statusLabel.setText("Exported: " + out.getName());
+            Settings.setLastExportDir(out.toPath().getParent());
+            setStatusText("Exported: " + out.getName());
         } catch (Exception ex) {
             new Alert(Alert.AlertType.ERROR, "Export failed: " + ex.getMessage()).showAndWait();
-        } finally {
-            Settings.setBackgroundMode(prevMode);
-            Settings.setBackgroundColor(prevColor);
-            renderCurrentPage();
         }
     }
 
@@ -728,6 +972,98 @@ public class MainViewController {
         try (OutputStream os = Files.newOutputStream(path)) {
             ImageIO.write(buffered, "png", os);
         }
+    }
+
+    private WritableImage captureCurrentViewForExport() {
+        int imageIndex = getSelectedImageIndex();
+        if (imageIndex >= 0) {
+            return captureImagePreviewExport(imageIndex);
+        }
+        return capturePageExport();
+    }
+
+    private WritableImage capturePageExport() {
+        SpmEntry selected = spmListView.getSelectionModel().getSelectedItem();
+        int pageIndex = canvasController.getCurrentPageIndex();
+        if (selected == null || selected.getSpm() == null || pageIndex < 0) {
+            return null;
+        }
+        List<Spm.SPMPageData> pages = Optional.ofNullable(selected.getSpm().getPageData()).orElse(List.of());
+        if (pageIndex >= pages.size()) {
+            return null;
+        }
+        Spm.SPMPageData page = pages.get(pageIndex);
+        SpmExportSupport.IntRect pageBounds = SpmExportSupport.computePageBounds(page);
+        if (pageBounds == null) {
+            return null;
+        }
+        return SpmExportSupport.renderPageImage(page, List.copyOf(canvasController.getLoadedImages()), pageBounds);
+    }
+
+    private WritableImage captureImagePreviewExport(int imageIndex) {
+        if (imageIndex < 0 || imageIndex >= canvasController.getLoadedImages().size()) {
+            return null;
+        }
+        Image image = canvasController.getLoadedImages().get(imageIndex);
+        if (image == null) {
+            return null;
+        }
+        WritableImage out = new WritableImage((int) image.getWidth(), (int) image.getHeight());
+        Canvas canvas = new Canvas(image.getWidth(), image.getHeight());
+        GraphicsContext g = canvas.getGraphicsContext2D();
+        g.drawImage(image, 0, 0);
+        if (showChipBoundsCheck.isSelected() || showPageBoundsCheck.isSelected()) {
+            drawImageBoundsOverlay(g, imageIndex, 0.0, 0.0);
+        }
+        return canvas.snapshot(null, out);
+    }
+
+    private String buildCurrentExportFileName() {
+        SpmEntry selected = spmListView.getSelectionModel().getSelectedItem();
+        String spmBaseName = selected == null
+                ? "spm"
+                : SpmExportSupport.sanitizeFileComponent(
+                SpmExportSupport.stripExtension(selected.getPath().getFileName().toString()));
+
+        int imageIndex = getSelectedImageIndex();
+        if (imageIndex >= 0) {
+            Image image = imageIndex < canvasController.getLoadedImages().size()
+                    ? canvasController.getLoadedImages().get(imageIndex)
+                    : null;
+            int width = image == null ? 0 : (int) image.getWidth();
+            int height = image == null ? 0 : (int) image.getHeight();
+            return String.format("%s_image_%03d_%dx%d.png", spmBaseName, imageIndex, width, height);
+        }
+
+        int pageIndex = canvasController.getCurrentPageIndex();
+        if (currentExportContext != null && currentExportContext.mode() == ExportContextMode.ANIMATION
+                && currentExportContext.animationFrame() != null) {
+            AnimationFrame frame = currentExportContext.animationFrame();
+            SpmExportSupport.IntRect bounds = currentPageBoundsForNaming();
+            int width = bounds == null ? 0 : bounds.width();
+            int height = bounds == null ? 0 : bounds.height();
+            return String.format("%s_anim_%03d_pat_%03d_slot_%03d_page_%03d_%dx%d.png",
+                    spmBaseName, parseAnimIndex(animSelector.getValue()), frame.patIndex(), frame.slotIndex(),
+                    pageIndex, width, height);
+        }
+
+        SpmExportSupport.IntRect bounds = currentPageBoundsForNaming();
+        int width = bounds == null ? 0 : bounds.width();
+        int height = bounds == null ? 0 : bounds.height();
+        return String.format("%s_page_%03d_%dx%d.png", spmBaseName, Math.max(pageIndex, 0), width, height);
+    }
+
+    private SpmExportSupport.IntRect currentPageBoundsForNaming() {
+        SpmEntry selected = spmListView.getSelectionModel().getSelectedItem();
+        int pageIndex = canvasController.getCurrentPageIndex();
+        if (selected == null || selected.getSpm() == null || pageIndex < 0) {
+            return null;
+        }
+        List<Spm.SPMPageData> pages = Optional.ofNullable(selected.getSpm().getPageData()).orElse(List.of());
+        if (pageIndex >= pages.size()) {
+            return null;
+        }
+        return SpmExportSupport.computePageBounds(pages.get(pageIndex));
     }
 
     @FXML private void onQuit() {
@@ -865,6 +1201,7 @@ public class MainViewController {
         currentAnimationIndex = normalized;
         AnimationFrame frame = currentAnimationFrames.get(normalized);
         selectPage(frame.pageNo());
+        currentExportContext = ExportContext.animation(frame);
         updateFrameUi();
     }
 
@@ -1027,89 +1364,22 @@ public class MainViewController {
 
     private void exportImageWithBounds(boolean chipMode) {
         SpmEntry selected = spmListView.getSelectionModel().getSelectedItem();
-        if (selected == null || selected.getSpm() == null) return;
-        if (imageList.getSelectionModel().isEmpty()) return;
-        int imgIdx;
-        try {
-            imgIdx = Integer.parseInt(imageList.getSelectionModel().getSelectedItem().split(":")[0].trim());
-        } catch (Exception ex) {
-            return;
-        }
-        List<Image> imgs = canvasController.getLoadedImages();
-        if (imgIdx < 0 || imgIdx >= imgs.size()) return;
-        Image base = imgs.get(imgIdx);
-        if (base == null) return;
+        if (selected == null || selected.getSpm() == null || imageList.getSelectionModel().isEmpty()) return;
+        int imgIdx = getSelectedImageIndex();
+        if (imgIdx < 0) return;
+        List<Image> imgs = List.copyOf(canvasController.getLoadedImages());
+        WritableImage out = SpmExportSupport.renderImageBoundsOverlay(selected.getSpm(), imgs, imgIdx, chipMode);
+        if (out == null) return;
 
-        WritableImage out = new WritableImage((int) base.getWidth(), (int) base.getHeight());
-        Canvas c = new Canvas(base.getWidth(), base.getHeight());
-        GraphicsContext g = c.getGraphicsContext2D();
-        g.drawImage(base, 0, 0);
-
-        List<Spm.SPMPageData> pages = Optional.ofNullable(selected.getSpm().getPageData()).orElse(List.of());
-        if (chipMode) {
-            g.setStroke(Color.CYAN);
-            g.setLineWidth(2.0);
-            g.setFill(Color.color(0, 1, 1, 0.2));
-            for (Spm.SPMPageData p : pages) {
-                for (Spm.SPMChipData chip : Optional.ofNullable(p.getChipData()).orElse(List.of())) {
-                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) continue;
-                    Spm.SPMRect src = chip.getSrcRect();
-                    if (src == null) continue;
-                    double x = val(src.getLeft());
-                    double y = val(src.getTop());
-                    double w = val(src.getRight()) - val(src.getLeft());
-                    double h = val(src.getBottom()) - val(src.getTop());
-                    g.fillRect(x, y, w, h);
-                    g.strokeRect(x, y, w, h);
-                }
-            }
-        } else {
-            g.setStroke(Color.ORANGE);
-            g.setLineWidth(1.5);
-            for (Spm.SPMPageData p : pages) {
-                double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
-                double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
-                boolean has = false;
-                for (Spm.SPMChipData chip : Optional.ofNullable(p.getChipData()).orElse(List.of())) {
-                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) continue;
-                    Spm.SPMRect src = chip.getSrcRect();
-                    if (src == null) continue;
-                    double x1 = val(src.getLeft());
-                    double y1 = val(src.getTop());
-                    double x2 = val(src.getRight());
-                    double y2 = val(src.getBottom());
-                    minX = Math.min(minX, Math.min(x1, x2));
-                    minY = Math.min(minY, Math.min(y1, y2));
-                    maxX = Math.max(maxX, Math.max(x1, x2));
-                    maxY = Math.max(maxY, Math.max(y1, y2));
-                    has = true;
-                }
-                if (has) {
-                    double x = minX;
-                    double y = minY;
-                    double w = maxX - minX;
-                    double h = maxY - minY;
-                    g.strokeRect(x, y, w, h);
-                }
-            }
-        }
-        c.snapshot(null, out);
-
-        // derive base filename from image meta
-        String baseName = "image-" + imgIdx;
-        List<Spm.SPMImageData> imgsMeta = Optional.ofNullable(selected.getSpm().getImageData()).orElse(List.of());
-        if (imgIdx < imgsMeta.size() && imgsMeta.get(imgIdx) != null && imgsMeta.get(imgIdx).getImageName() != null
-                && !imgsMeta.get(imgIdx).getImageName().isBlank()) {
-            baseName = imgsMeta.get(imgIdx).getImageName().replaceAll("[\\\\/:*?\"<>|]", "_");
-            if (baseName.toLowerCase().endsWith(".png")) {
-                baseName = baseName.substring(0, baseName.length() - 4);
-            }
-        }
+        String baseName = SpmExportSupport.sanitizeFileComponent(
+                SpmExportSupport.stripExtension(Optional.ofNullable(imageList.getSelectionModel().getSelectedItem())
+                        .orElse("image-" + imgIdx)));
+        String suffix = chipMode ? "_chip_bounds" : "_page_bounds";
 
         FileChooser chooser = new FileChooser();
         chooser.setTitle(chipMode ? "Export Image with Chip Bounds" : "Export Image with Page Bounds");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG", "*.png"));
-        chooser.setInitialFileName(baseName + (chipMode ? "-chip-bounds.png" : "-page-bounds.png"));
+        chooser.setInitialFileName(baseName + suffix + "_" + (int) out.getWidth() + "x" + (int) out.getHeight() + ".png");
         Path lastExport = Settings.getLastExportDir();
         if (lastExport != null && lastExport.toFile().isDirectory()) {
             chooser.setInitialDirectory(lastExport.toFile());
@@ -1117,37 +1387,13 @@ public class MainViewController {
         File target = chooser.showSaveDialog(canvasHolder.getScene().getWindow());
         if (target == null) return;
         try {
-            savePng(out, target);
-            statusLabel.setText("Exported bounds: " + target.getName());
+            writePng(out, target.toPath());
+            setStatusText("Exported bounds: " + target.getName());
             Settings.setLastExportDir(target.toPath().getParent());
         } catch (Exception ex) {
             log.error("export bounds failed", ex);
             new Alert(Alert.AlertType.ERROR, "Export failed: " + ex.getMessage()).showAndWait();
         }
-    }
-
-    private void savePng(Image image, File target) throws IOException {
-        WritableImage snap = new WritableImage((int) image.getWidth(), (int) image.getHeight());
-        SnapshotParameters params = new SnapshotParameters();
-        params.setFill(Color.TRANSPARENT);
-        Canvas tmp = new Canvas(image.getWidth(), image.getHeight());
-        tmp.getGraphicsContext2D().drawImage(image, 0, 0);
-        tmp.snapshot(params, snap);
-
-        BufferedImage buffered = new BufferedImage((int) image.getWidth(), (int) image.getHeight(), BufferedImage.TYPE_INT_ARGB);
-        int[] buffer = new int[(int) image.getWidth()];
-        PixelReader reader = snap.getPixelReader();
-        for (int y = 0; y < image.getHeight(); y++) {
-            reader.getPixels(0, y, (int) image.getWidth(), 1, PixelFormat.getIntArgbInstance(), buffer, 0, (int) image.getWidth());
-            for (int x = 0; x < image.getWidth(); x++) {
-                buffered.setRGB(x, y, buffer[x]);
-            }
-        }
-        ImageIO.write(buffered, "png", target);
-    }
-
-    private double val(Integer v) {
-        return v == null ? 0.0 : v.doubleValue();
     }
 
     private void overlayImageBounds(int imgIdx) {
@@ -1171,42 +1417,59 @@ public class MainViewController {
 
         GraphicsContext g = canvasController.getCanvas().getGraphicsContext2D();
         g.save();
-        // chip bounds
+        drawImageBoundsOverlay(g, imgIdx, offsetX, offsetY);
+        g.restore();
+    }
+
+    private void drawImageBoundsOverlay(GraphicsContext g, int imgIdx, double offsetX, double offsetY) {
+        SpmEntry selectedEntry = spmListView.getSelectionModel().getSelectedItem();
+        if (selectedEntry == null || selectedEntry.getSpm() == null) {
+            return;
+        }
         if (showChipBoundsCheck.isSelected()) {
             g.setStroke(Color.CYAN);
             g.setFill(Color.color(0, 1, 1, 0.15));
             g.setLineWidth(2.0);
-            for (Spm.SPMPageData p : Optional.ofNullable(selectedEntry.getSpm().getPageData()).orElse(List.of())) {
-                for (Spm.SPMChipData chip : Optional.ofNullable(p.getChipData()).orElse(List.of())) {
-                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) continue;
+            for (Spm.SPMPageData page : Optional.ofNullable(selectedEntry.getSpm().getPageData()).orElse(List.of())) {
+                for (Spm.SPMChipData chip : Optional.ofNullable(page.getChipData()).orElse(List.of())) {
+                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) {
+                        continue;
+                    }
                     Spm.SPMRect src = chip.getSrcRect();
-                    if (src == null) continue;
-                    double x = offsetX + val(src.getLeft());
-                    double y = offsetY + val(src.getTop());
-                    double w = val(src.getRight()) - val(src.getLeft());
-                    double h = val(src.getBottom()) - val(src.getTop());
+                    if (src == null) {
+                        continue;
+                    }
+                    double x = offsetX + safeInt(src.getLeft());
+                    double y = offsetY + safeInt(src.getTop());
+                    double w = safeInt(src.getRight()) - safeInt(src.getLeft());
+                    double h = safeInt(src.getBottom()) - safeInt(src.getTop());
                     g.fillRect(x, y, w, h);
                     g.strokeRect(x, y, w, h);
                 }
             }
         }
-        // page bounds approximated as union of chips per page for this image
         if (showPageBoundsCheck.isSelected()) {
             g.setStroke(Color.ORANGE);
             g.setLineWidth(1.5);
             List<Spm.SPMPageData> pages = Optional.ofNullable(selectedEntry.getSpm().getPageData()).orElse(List.of());
-            for (Spm.SPMPageData p : pages) {
-                double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
-                double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+            for (Spm.SPMPageData page : pages) {
+                double minX = Double.POSITIVE_INFINITY;
+                double minY = Double.POSITIVE_INFINITY;
+                double maxX = Double.NEGATIVE_INFINITY;
+                double maxY = Double.NEGATIVE_INFINITY;
                 boolean has = false;
-                for (Spm.SPMChipData chip : Optional.ofNullable(p.getChipData()).orElse(List.of())) {
-                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) continue;
+                for (Spm.SPMChipData chip : Optional.ofNullable(page.getChipData()).orElse(List.of())) {
+                    if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) {
+                        continue;
+                    }
                     Spm.SPMRect src = chip.getSrcRect();
-                    if (src == null) continue;
-                    double x1 = val(src.getLeft());
-                    double y1 = val(src.getTop());
-                    double x2 = val(src.getRight());
-                    double y2 = val(src.getBottom());
+                    if (src == null) {
+                        continue;
+                    }
+                    double x1 = safeInt(src.getLeft());
+                    double y1 = safeInt(src.getTop());
+                    double x2 = safeInt(src.getRight());
+                    double y2 = safeInt(src.getBottom());
                     minX = Math.min(minX, Math.min(x1, x2));
                     minY = Math.min(minY, Math.min(y1, y2));
                     maxX = Math.max(maxX, Math.max(x1, x2));
@@ -1214,15 +1477,10 @@ public class MainViewController {
                     has = true;
                 }
                 if (has) {
-                    double x = offsetX + minX;
-                    double y = offsetY + minY;
-                    double w = maxX - minX;
-                    double h = maxY - minY;
-                    g.strokeRect(x, y, w, h);
+                    g.strokeRect(offsetX + minX, offsetY + minY, maxX - minX, maxY - minY);
                 }
             }
         }
-        g.restore();
     }
 
     private void refreshImagePreviewWithBounds(int idx) {
@@ -1248,6 +1506,36 @@ public class MainViewController {
         } catch (Exception ex) {
             return -1;
         }
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private enum ExportContextMode {
+        PAGE,
+        ANIMATION,
+        IMAGE
+    }
+
+    private record ExportContext(ExportContextMode mode, Integer pageIndex, Integer imageIndex, AnimationFrame animationFrame) {
+        static ExportContext page(int pageIndex) {
+            return new ExportContext(ExportContextMode.PAGE, pageIndex, null, null);
+        }
+
+        static ExportContext image(int imageIndex) {
+            return new ExportContext(ExportContextMode.IMAGE, null, imageIndex, null);
+        }
+
+        static ExportContext animation(AnimationFrame frame) {
+            return new ExportContext(ExportContextMode.ANIMATION, frame.pageNo(), null, frame);
+        }
+    }
+
+    private record ExportItem(String fileName, Callable<WritableImage> renderer) {
+    }
+
+    private record ExportSummary(int exported, int skipped, int total, Path targetDir) {
     }
 
     private record TreeSelectionContext(int animIndex, int patIndex, List<Integer> pageNos) { }

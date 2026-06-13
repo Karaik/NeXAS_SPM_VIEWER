@@ -9,6 +9,8 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ListView;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ToolBar;
 import javafx.scene.image.PixelWriter;
 import javafx.scene.image.WritableImage;
@@ -33,6 +35,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -180,6 +183,36 @@ class MainViewControllerUiTest {
             assertTrue(countPixels(previewBefore, this::isWhiteImagePixel) > 0, "整图预览应保留底图内容");
             assertTrue(countPixels(previewAfter, this::isWhiteImagePixel) > 0, "切换显示开关后整图预览不应被清空");
             assertTrue(countChangedPixels(previewBefore, previewAfter) > 0, "整图预览模式下开启 bounds 后应出现额外叠加内容");
+            return null;
+        });
+    }
+
+    @Test
+    void endingBusyStateAllowsStatusTextUpdates() throws Exception {
+        LoadedView view = loadView();
+        runOnFxThread(() -> {
+            MainViewController controller = view.controller();
+            Label statusLabel = (Label) accessField(controller, "statusLabel");
+            ProgressBar progressBar = (ProgressBar) accessField(controller, "progressBar");
+
+            javafx.concurrent.Task<Void> task = new javafx.concurrent.Task<>() {
+                @Override
+                protected Void call() {
+                    updateMessage("working");
+                    updateProgress(1, 1);
+                    return null;
+                }
+            };
+
+            invokeMethod(controller, "beginBusyState", new Class<?>[]{javafx.concurrent.Task.class}, task);
+            task.run();
+            if (!"working".equals(statusLabel.getText())) {
+                throw new AssertionError("busy 状态下应同步显示任务消息");
+            }
+            invokeMethod(controller, "endBusyState", new Class<?>[0]);
+
+            assertFalse(progressBar.progressProperty().isBound(), "结束 busy 状态后进度条不应继续绑定");
+            assertDoesNotThrow(() -> statusLabel.setText("done"), "解除绑定后应允许直接写入状态文本");
             return null;
         });
     }

@@ -21,7 +21,9 @@ public final class AnimationPlanBuilder {
         }
         int effectiveCount = Math.max(0, patPageCount);
         List<AnimationFrame> frames = new ArrayList<>();
-        for (Spm.SPMPatData pat : anim.getPatData()) {
+        List<Spm.SPMPatData> pats = anim.getPatData();
+        for (int patIndex = 0; patIndex < pats.size(); patIndex++) {
+            Spm.SPMPatData pat = pats.get(patIndex);
             int wait = Optional.ofNullable(pat.getWaitFrame()).orElse(1);
             List<Integer> pageNos = Optional.ofNullable(pat.getPageNo()).orElse(List.of());
             if (pageNos.isEmpty()) {
@@ -29,13 +31,13 @@ public final class AnimationPlanBuilder {
             }
             int limit = effectiveCount > 0 ? Math.min(effectiveCount, pageNos.size()) : pageNos.size();
             for (int i = 0; i < limit; i++) {
-                frames.add(new AnimationFrame(pageNos.get(i), wait));
+                frames.add(new AnimationFrame(pageNos.get(i), wait, patIndex, i));
             }
         }
         return frames;
     }
 
-    public record AnimationFrame(int pageNo, int waitFrames) {
+    public record AnimationFrame(int pageNo, int waitFrames, int patIndex, int slotIndex) {
         public int effectiveWaitFrames() {
             return waitFrames <= 0 ? 1 : waitFrames;
         }

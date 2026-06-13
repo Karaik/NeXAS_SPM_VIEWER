@@ -23,6 +23,31 @@ class AnimationPlanBuilderTest {
         assertEquals(0, frames.get(0).pageNo());
         assertEquals(1, frames.get(1).pageNo());
         assertEquals(3, frames.get(0).effectiveWaitFrames());
+        assertEquals(0, frames.get(0).patIndex());
+        assertEquals(0, frames.get(0).slotIndex());
+        assertEquals(0, frames.get(1).patIndex());
+        assertEquals(1, frames.get(1).slotIndex());
+    }
+
+    @Test
+    void buildFramesPreservesPatAndSlotIndexes() {
+        Spm.SPMAnimData anim = new Spm.SPMAnimData();
+        Spm.SPMPatData pat0 = new Spm.SPMPatData();
+        pat0.setWaitFrame(1);
+        pat0.setPageNo(List.of(3, 4));
+        Spm.SPMPatData pat1 = new Spm.SPMPatData();
+        pat1.setWaitFrame(2);
+        pat1.setPageNo(List.of(9));
+        anim.setPatData(List.of(pat0, pat1));
+
+        List<AnimationFrame> frames = AnimationPlanBuilder.build(anim, 2);
+        assertEquals(3, frames.size());
+        assertEquals(0, frames.get(0).patIndex());
+        assertEquals(0, frames.get(0).slotIndex());
+        assertEquals(0, frames.get(1).patIndex());
+        assertEquals(1, frames.get(1).slotIndex());
+        assertEquals(1, frames.get(2).patIndex());
+        assertEquals(0, frames.get(2).slotIndex());
     }
 
     @Test
