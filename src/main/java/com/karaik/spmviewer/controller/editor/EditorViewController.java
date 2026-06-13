@@ -257,7 +257,7 @@ public class EditorViewController {
             }
         });
         canvasHolder.addEventFilter(ScrollEvent.SCROLL, e -> {
-            if (e.isControlDown()) {
+            if (e.isAltDown()) {
                 double delta = e.getDeltaY() > 0 ? 0.1 : -0.1;
                 double next = Math.max(zoomSlider.getMin(), Math.min(zoomSlider.getMax(), zoomSlider.getValue() + delta));
                 zoomSlider.setValue(next);
@@ -751,7 +751,7 @@ public class EditorViewController {
         g.setFill(Color.WHITE);
         g.fillText("Workflow: select Chip -> Import/Preview sprite -> Match bounds -> Save to tmp/", 20, 30);
         g.fillText("Shortcuts: Ctrl+E image edit, Ctrl+S save, Ctrl+Z/Y undo/redo", 20, 50);
-        g.fillText("Zoom: Ctrl+wheel or +/- , middle-drag to pan, Fit centers current page", 20, 70);
+        g.fillText("Zoom: Alt+wheel or +/- , middle-drag to pan, Fit centers current page", 20, 70);
         g.restore();
     }
 

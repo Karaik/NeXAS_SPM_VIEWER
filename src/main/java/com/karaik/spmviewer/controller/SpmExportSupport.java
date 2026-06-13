@@ -138,6 +138,7 @@ final class SpmExportSupport {
                     }
                     g.fillRect(srcBounds.x(), srcBounds.y(), srcBounds.width(), srcBounds.height());
                     g.strokeRect(srcBounds.x(), srcBounds.y(), srcBounds.width(), srcBounds.height());
+                    drawCenterMarker(g, srcBounds);
                     hasOverlay = true;
                 }
             }
@@ -148,6 +149,7 @@ final class SpmExportSupport {
                 IntRect bounds = computeImagePageBounds(page, imageIndex);
                 if (bounds != null) {
                     g.strokeRect(bounds.x(), bounds.y(), bounds.width(), bounds.height());
+                    drawCenterMarker(g, bounds);
                     hasOverlay = true;
                 }
             }
@@ -267,6 +269,24 @@ final class SpmExportSupport {
 
     private static int safe(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private static void drawCenterMarker(GraphicsContext g, IntRect bounds) {
+        IntRect marker = computeCenterMarker(bounds);
+        g.setFill(Color.color(1.0, 0.0, 0.0, 0.95));
+        g.fillRect(marker.x(), marker.y(), marker.width(), marker.height());
+    }
+
+    /**
+     * bounds 使用的是像素边界坐标，因此中心可能落在像素中点，也可能落在像素缝。
+     * 宽高为奇数时中心是一个像素点；宽高为偶数时中心会跨两个像素。
+     */
+    private static IntRect computeCenterMarker(IntRect bounds) {
+        int markerWidth = (bounds.width() % 2 == 0) ? 2 : 1;
+        int markerHeight = (bounds.height() % 2 == 0) ? 2 : 1;
+        int markerX = bounds.x() + bounds.width() / 2 - (markerWidth == 2 ? 1 : 0);
+        int markerY = bounds.y() + bounds.height() / 2 - (markerHeight == 2 ? 1 : 0);
+        return new IntRect(markerX, markerY, markerWidth, markerHeight);
     }
 
     private static WritableImage snapshotTransparent(Canvas canvas) {

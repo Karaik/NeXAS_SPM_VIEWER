@@ -397,7 +397,7 @@ public class MainViewController {
         });
 
         scrollPane.addEventFilter(ScrollEvent.SCROLL, event -> {
-            if (event.isControlDown()) {
+            if (event.isAltDown()) {
                 zoomSlider.setValue(zoomSlider.getValue() * (event.getDeltaY() > 0 ? 1.1 : 1.0 / 1.1));
                 event.consume();
             }
@@ -1078,7 +1078,7 @@ public class MainViewController {
         alert.setTitle("Shortcuts");
         alert.setHeaderText("Keyboard and Mouse Shortcuts");
         alert.setContentText("Play/Pause Media Key: Toggle animation playback\n\n" +
-                "Ctrl + Mouse Scroll: Zoom in/out on the canvas\n\n" +
+                "Alt + Mouse Scroll: Zoom in/out on the canvas\n\n" +
                 "Middle Mouse Button Drag: Pan the canvas");
         alert.showAndWait();
     }
