@@ -449,9 +449,9 @@ public class MainViewController {
 
     private void setupImageContextMenu() {
         ContextMenu menu = new ContextMenu();
-        MenuItem exportChip = new MenuItem("Export with Chip Bounds (PNG)");
+        MenuItem exportChip = new MenuItem("Export Chip Bounds Only (PNG)");
         exportChip.setOnAction(e -> exportImageWithBounds(true));
-        MenuItem exportPage = new MenuItem("Export with Page Bounds (PNG)");
+        MenuItem exportPage = new MenuItem("Export Page Bounds Only (PNG)");
         exportPage.setOnAction(e -> exportImageWithBounds(false));
         menu.getItems().addAll(exportChip, exportPage);
         imageList.setContextMenu(menu);
@@ -1369,15 +1369,16 @@ public class MainViewController {
         if (imgIdx < 0) return;
         List<Image> imgs = List.copyOf(canvasController.getLoadedImages());
         WritableImage out = SpmExportSupport.renderImageBoundsOverlay(selected.getSpm(), imgs, imgIdx, chipMode);
-        if (out == null) return;
+        if (out == null) {
+            new Alert(Alert.AlertType.INFORMATION, "Nothing to export.").showAndWait();
+            return;
+        }
 
-        String baseName = SpmExportSupport.sanitizeFileComponent(
-                SpmExportSupport.stripExtension(Optional.ofNullable(imageList.getSelectionModel().getSelectedItem())
-                        .orElse("image-" + imgIdx)));
+        String baseName = buildImageExportBaseName(selected.getSpm(), imgIdx);
         String suffix = chipMode ? "_chip_bounds" : "_page_bounds";
 
         FileChooser chooser = new FileChooser();
-        chooser.setTitle(chipMode ? "Export Image with Chip Bounds" : "Export Image with Page Bounds");
+        chooser.setTitle(chipMode ? "Export Chip Bounds Only" : "Export Page Bounds Only");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG", "*.png"));
         chooser.setInitialFileName(baseName + suffix + "_" + (int) out.getWidth() + "x" + (int) out.getHeight() + ".png");
         Path lastExport = Settings.getLastExportDir();
@@ -1394,6 +1395,18 @@ public class MainViewController {
             log.error("export bounds failed", ex);
             new Alert(Alert.AlertType.ERROR, "Export failed: " + ex.getMessage()).showAndWait();
         }
+    }
+
+    private String buildImageExportBaseName(Spm spm, int imageIndex) {
+        List<Spm.SPMImageData> images = spm == null ? List.of() : Optional.ofNullable(spm.getImageData()).orElse(List.of());
+        if (imageIndex >= 0 && imageIndex < images.size()) {
+            Spm.SPMImageData imageData = images.get(imageIndex);
+            String imageName = imageData == null ? null : imageData.getImageName();
+            if (imageName != null && !imageName.isBlank()) {
+                return SpmExportSupport.sanitizeFileComponent(SpmExportSupport.stripExtension(imageName));
+            }
+        }
+        return "image-" + imageIndex;
     }
 
     private void overlayImageBounds(int imgIdx) {

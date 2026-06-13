@@ -118,7 +118,7 @@ final class SpmExportSupport {
         }
         Canvas canvas = new Canvas(base.getWidth(), base.getHeight());
         GraphicsContext g = canvas.getGraphicsContext2D();
-        g.drawImage(base, 0, 0);
+        boolean hasOverlay = false;
 
         List<Spm.SPMPageData> pages = Optional.ofNullable(spm.getPageData()).orElse(List.of());
         if (chipMode) {
@@ -136,6 +136,7 @@ final class SpmExportSupport {
                     }
                     g.fillRect(srcBounds.x(), srcBounds.y(), srcBounds.width(), srcBounds.height());
                     g.strokeRect(srcBounds.x(), srcBounds.y(), srcBounds.width(), srcBounds.height());
+                    hasOverlay = true;
                 }
             }
         } else {
@@ -145,10 +146,11 @@ final class SpmExportSupport {
                 IntRect bounds = computeImagePageBounds(page, imageIndex);
                 if (bounds != null) {
                     g.strokeRect(bounds.x(), bounds.y(), bounds.width(), bounds.height());
+                    hasOverlay = true;
                 }
             }
         }
-        return canvas.snapshot(null, null);
+        return hasOverlay ? canvas.snapshot(null, null) : null;
     }
 
     static String stripExtension(String name) {
