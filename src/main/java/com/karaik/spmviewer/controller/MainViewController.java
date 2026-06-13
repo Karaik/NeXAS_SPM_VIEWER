@@ -166,8 +166,10 @@ public class MainViewController {
     }
 
     private void setupDisplayOptionListeners() {
-        showCoordsCheck.selectedProperty().addListener((obs, oldVal, newVal) -> renderCurrentPage());
-        showHitboxCheck.selectedProperty().addListener((obs, oldVal, newVal) -> renderCurrentPage());
+        showCoordsCheck.selectedProperty().addListener((obs, oldVal, newVal) -> refreshActiveView());
+        showHitboxCheck.selectedProperty().addListener((obs, oldVal, newVal) -> refreshActiveView());
+        showChipBoundsCheck.selectedProperty().addListener((obs, oldVal, newVal) -> refreshActiveView());
+        showPageBoundsCheck.selectedProperty().addListener((obs, oldVal, newVal) -> refreshActiveView());
 
         autoPlayCheck.setSelected(Settings.isAutoPlayEnabled());
         autoPlayCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
@@ -186,7 +188,7 @@ public class MainViewController {
         originModeSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
                 Settings.setOriginMode(newVal);
-                renderCurrentPage();
+                refreshActiveView();
             }
         });
     }
@@ -227,7 +229,7 @@ public class MainViewController {
         backgroundModeSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
                 Settings.setBackgroundMode(newVal);
-                renderCurrentPage();
+                refreshActiveView();
             }
         });
 
@@ -235,7 +237,7 @@ public class MainViewController {
             if (newVal != null) {
                 Settings.setBackgroundColor(newVal);
                 if (Settings.getBackgroundMode() == Settings.BackgroundMode.SOLID_COLOR) {
-                    renderCurrentPage();
+                    refreshActiveView();
                 }
             }
         });
@@ -329,14 +331,11 @@ public class MainViewController {
             if (item != null) {
                 try {
                     int idx = Integer.parseInt(item.split(":")[0].trim());
-                    previewImage(idx, item);
                     refreshImagePreviewWithBounds(idx);
                 } catch (NumberFormatException ignored) {}
             }
         });
         setupImageContextMenu();
-        showChipBoundsCheck.selectedProperty().addListener((obs, o, n) -> refreshImagePreviewWithBounds(getSelectedImageIndex()));
-        showPageBoundsCheck.selectedProperty().addListener((obs, o, n) -> refreshImagePreviewWithBounds(getSelectedImageIndex()));
 
         animSelector.setOnAction(e -> {
             if (animSelector.getValue() == null) {
@@ -631,6 +630,15 @@ public class MainViewController {
                 Settings.getBackgroundColor(),
                 Settings.getOriginMode()
         );
+    }
+
+    private void refreshActiveView() {
+        int imageIndex = getSelectedImageIndex();
+        if (imageIndex >= 0) {
+            refreshImagePreviewWithBounds(imageIndex);
+            return;
+        }
+        renderCurrentPage();
     }
 
     /**
@@ -1144,6 +1152,10 @@ public class MainViewController {
 
     private void overlayImageBounds(int imgIdx) {
         if (imgIdx < 0) return;
+        SpmEntry selectedEntry = spmListView.getSelectionModel().getSelectedItem();
+        if (selectedEntry == null || selectedEntry.getSpm() == null) {
+            return;
+        }
         List<Image> imgs = canvasController.getLoadedImages();
         if (imgIdx < 0 || imgIdx >= imgs.size()) return;
         Image img = imgs.get(imgIdx);
@@ -1164,7 +1176,7 @@ public class MainViewController {
             g.setStroke(Color.CYAN);
             g.setFill(Color.color(0, 1, 1, 0.15));
             g.setLineWidth(2.0);
-            for (Spm.SPMPageData p : Optional.ofNullable(spmListView.getSelectionModel().getSelectedItem().getSpm().getPageData()).orElse(List.of())) {
+            for (Spm.SPMPageData p : Optional.ofNullable(selectedEntry.getSpm().getPageData()).orElse(List.of())) {
                 for (Spm.SPMChipData chip : Optional.ofNullable(p.getChipData()).orElse(List.of())) {
                     if (chip.getImageNo() == null || !chip.getImageNo().equals(imgIdx)) continue;
                     Spm.SPMRect src = chip.getSrcRect();
@@ -1182,7 +1194,7 @@ public class MainViewController {
         if (showPageBoundsCheck.isSelected()) {
             g.setStroke(Color.ORANGE);
             g.setLineWidth(1.5);
-            List<Spm.SPMPageData> pages = Optional.ofNullable(spmListView.getSelectionModel().getSelectedItem().getSpm().getPageData()).orElse(List.of());
+            List<Spm.SPMPageData> pages = Optional.ofNullable(selectedEntry.getSpm().getPageData()).orElse(List.of());
             for (Spm.SPMPageData p : pages) {
                 double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
                 double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
@@ -1216,7 +1228,11 @@ public class MainViewController {
     private void refreshImagePreviewWithBounds(int idx) {
         if (idx < 0) return;
         try {
-            previewImage(idx, imageList.getSelectionModel().getSelectedItem());
+            String imageName = imageList.getSelectionModel().getSelectedItem();
+            if (imageName == null) {
+                return;
+            }
+            previewImage(idx, imageName);
             if (showChipBoundsCheck.isSelected() || showPageBoundsCheck.isSelected()) {
                 overlayImageBounds(idx);
             }
